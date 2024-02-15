@@ -20,6 +20,7 @@ pub enum Token {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
+    Null,
     Number,
     Term,
     Factor,
@@ -30,11 +31,12 @@ pub enum Priority {
 impl Priority {
     pub fn next(&self) -> Self {
         match self {
+            Self::Null => Self::Number,
+            Self::Number => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
             Self::Unary => Self::Group,
             Self::Group => Self::Group,
-            Self::Number => Self::Term,
         }
     }
 }
@@ -44,7 +46,7 @@ impl Token {
         match self {
             Token::Number(_) => Priority::Number,
             Token::LeftParen => Priority::Group,
-            Token::RightParen => Priority::Group,
+            Token::RightParen => Priority::Null,
             Token::Plus => Priority::Term,
             Token::Minus => Priority::Term,
             Token::Mult => Priority::Factor,
@@ -77,7 +79,6 @@ pub struct Lexer {
     src_index: usize,
 }
 
-#[allow(dead_code)]
 impl Lexer {
     pub fn new(value: &'static [u8]) -> Self {
         Lexer {

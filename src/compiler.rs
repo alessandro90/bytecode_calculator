@@ -158,11 +158,11 @@ impl Compiler {
     }
 
     fn consume(&mut self, lexer: &mut impl Scan, target: Token, err: Error) -> CompilerResult {
-        let tok = lexer.scan()?;
-        if tok != target {
-            Err(err)
-        } else {
+        if self.current_token.is_some_and(|tok| tok == target) {
+            self.advance(lexer);
             Ok(())
+        } else {
+            Err(err)
         }
     }
 
@@ -258,6 +258,18 @@ mod compiler_tests {
     }
 
     #[test]
+    fn test_single_negative_number() {
+        let mut lexer = MockLexer::new(vec![Token::Minus, Token::Number(b"1")]);
+        let mut compiler = Compiler::new();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 1.0);
+        assert_eq!(compiler.chunk[9], Op::UnaryMinus.into());
+    }
+
+    #[test]
     fn test_sum_of_two_numbers() {
         let mut lexer = MockLexer::new(vec![Token::Number(b"1"), Token::Plus, Token::Number(b"2")]);
         let mut compiler = Compiler::new();
@@ -272,5 +284,34 @@ mod compiler_tests {
         assert_eq!(float, 2.0);
 
         assert_eq!(compiler.chunk[18], Op::Add.into());
+    }
+
+    #[test]
+    fn test_grouping() {
+        let mut lexer = MockLexer::new(vec![
+            Token::Number(b"2"),
+            Token::Mult,
+            Token::LeftParen,
+            Token::Number(b"1"),
+            Token::Plus,
+            Token::Number(b"1.5"),
+            Token::RightParen,
+        ]);
+        let mut compiler = Compiler::new();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 2.0);
+
+        assert_eq!(compiler.chunk[9], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[10..=17]);
+        assert_eq!(float, 1.0);
+
+        assert_eq!(compiler.chunk[18], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[19..=26]);
+        assert_eq!(float, 1.5);
+
+        assert_eq!(compiler.chunk[27], Op::Add.into());
     }
 }
