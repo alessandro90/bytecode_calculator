@@ -36,11 +36,11 @@ pub enum Op {
     // it is an integer and for e.g. in [0, 255] could
     // make a Op::SmallNumber that just needs an extra byte
     Number = 0,
-    Add = 1,
-    Subtract = 2,
-    Multiply = 3,
-    Divide = 4,
-    UnaryMinus = 6,
+    Plus = 1,
+    Minus = 2,
+    Mult = 3,
+    Div = 4,
+    Negate = 6,
 }
 
 impl From<Op> for u8 {
@@ -54,11 +54,11 @@ impl TryFrom<u8> for Op {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Op::Number),
-            1 => Ok(Op::Add),
-            2 => Ok(Op::Subtract),
-            3 => Ok(Op::Multiply),
-            4 => Ok(Op::Divide),
-            5 => Ok(Op::UnaryMinus),
+            1 => Ok(Op::Plus),
+            2 => Ok(Op::Minus),
+            3 => Ok(Op::Mult),
+            4 => Ok(Op::Div),
+            5 => Ok(Op::Negate),
             x => Err(Error::InvalidOpCode(x)),
         }
     }
@@ -132,19 +132,19 @@ impl Compiler {
         self.expression(lexer, tok.priority().next())?;
         match tok {
             Token::Minus => {
-                self.chunk.push(Op::Subtract.into());
+                self.chunk.push(Op::Minus.into());
                 Ok(())
             }
             Token::Plus => {
-                self.chunk.push(Op::Add.into());
+                self.chunk.push(Op::Plus.into());
                 Ok(())
             }
             Token::Div => {
-                self.chunk.push(Op::Divide.into());
+                self.chunk.push(Op::Div.into());
                 Ok(())
             }
             Token::Mult => {
-                self.chunk.push(Op::Multiply.into());
+                self.chunk.push(Op::Mult.into());
                 Ok(())
             }
             t => Err(Error::InvalidToken(t)),
@@ -180,7 +180,7 @@ impl Compiler {
 
     fn emit_unary(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.expression(lexer, Priority::Unary)?;
-        self.chunk.push(Op::UnaryMinus.into());
+        self.chunk.push(Op::Negate.into());
         Ok(())
     }
 
@@ -266,7 +266,7 @@ mod compiler_tests {
         assert_eq!(compiler.chunk[0], Op::Number.into());
         let (_, float) = parse_number(&compiler.chunk[1..=8]);
         assert_eq!(float, 1.0);
-        assert_eq!(compiler.chunk[9], Op::UnaryMinus.into());
+        assert_eq!(compiler.chunk[9], Op::Negate.into());
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod compiler_tests {
         let (_, float) = parse_number(&compiler.chunk[10..=17]);
         assert_eq!(float, 2.0);
 
-        assert_eq!(compiler.chunk[18], Op::Add.into());
+        assert_eq!(compiler.chunk[18], Op::Plus.into());
     }
 
     #[test]
@@ -312,6 +312,64 @@ mod compiler_tests {
         let (_, float) = parse_number(&compiler.chunk[19..=26]);
         assert_eq!(float, 1.5);
 
-        assert_eq!(compiler.chunk[27], Op::Add.into());
+        assert_eq!(compiler.chunk[27], Op::Plus.into());
+    }
+
+    #[test]
+    fn test_long_complex_expression() {
+        // 1 + (2e-3 / 4 + 2) * 2 - 1
+        let mut lexer = MockLexer::new(vec![
+            Token::Number(b"1"),
+            Token::Plus,
+            Token::LeftParen,
+            Token::Number(b"2e-3"),
+            Token::Div,
+            Token::Number(b"4"),
+            Token::Plus,
+            Token::Number(b"2"),
+            Token::RightParen,
+            Token::Mult,
+            Token::Number(b"2"),
+            Token::Minus,
+            Token::Number(b"1"),
+        ]);
+
+        let mut compiler = Compiler::new();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 1.0);
+
+        assert_eq!(compiler.chunk[9], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[10..=17]);
+        assert_eq!(float, 2e-3);
+
+        assert_eq!(compiler.chunk[18], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[19..=26]);
+        assert_eq!(float, 4.0);
+
+        assert_eq!(compiler.chunk[27], Op::Div.into());
+
+        assert_eq!(compiler.chunk[28], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[29..=36]);
+        assert_eq!(float, 2.0);
+
+        assert_eq!(compiler.chunk[37], Op::Plus.into());
+
+        assert_eq!(compiler.chunk[38], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[39..=46]);
+        assert_eq!(float, 2.0);
+
+        assert_eq!(compiler.chunk[47], Op::Mult.into());
+
+        assert_eq!(compiler.chunk[48], Op::Plus.into());
+
+        assert_eq!(compiler.chunk[49], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[50..=57]);
+        assert_eq!(float, 1.0);
+
+        assert_eq!(compiler.chunk[58], Op::Minus.into());
     }
 }
