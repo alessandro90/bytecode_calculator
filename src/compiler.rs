@@ -75,7 +75,7 @@ pub type CompilerResult = Result<(), Error>;
 
 impl Compile for Compiler {
     fn compile(&mut self, lexer: &mut impl Scan) -> CompilerResult {
-        self.advance(lexer);
+        self.advance(lexer)?;
         self.expression(lexer, Priority::Term)?;
         match self.current_token {
             Some(t) => {
@@ -103,7 +103,7 @@ impl Compiler {
     }
 
     pub fn expression(&mut self, lexer: &mut impl Scan, priority: Priority) -> CompilerResult {
-        self.advance(lexer);
+        self.advance(lexer)?;
         if let Some(prev) = self.prev_token {
             match prev {
                 Token::Minus => self.emit_unary(lexer),
@@ -116,7 +116,7 @@ impl Compiler {
             }?;
         }
         while self.current_token.is_some_and(|t| t.priority() >= priority) {
-            self.advance(lexer);
+            self.advance(lexer)?;
             if let Some(prev) = self.prev_token {
                 match prev {
                     Token::Div | Token::Plus | Token::Mult | Token::Minus => {
@@ -152,16 +152,25 @@ impl Compiler {
         }
     }
 
-    fn advance(&mut self, lexer: &mut impl Scan) {
+    fn advance(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.prev_token = self.current_token;
         let tok = lexer.scan();
         self.current_token = tok.ok();
+        match tok {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if e != LexerError::Eof {
+                    Err(e.into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
     }
 
     fn consume(&mut self, lexer: &mut impl Scan, target: Token, err: Error) -> CompilerResult {
         if self.current_token.is_some_and(|tok| tok == target) {
-            self.advance(lexer);
-            Ok(())
+            self.advance(lexer)
         } else {
             Err(err)
         }
