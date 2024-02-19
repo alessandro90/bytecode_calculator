@@ -102,9 +102,9 @@ impl Lexer {
         self.src.get(self.src_index).cloned()
     }
 
-    fn peek_after(&self, after: usize) -> Option<u8> {
-        self.src.get(self.src_index + after).cloned()
-    }
+    // fn peek_after(&self, after: usize) -> Option<u8> {
+    //     self.src.get(self.src_index + after).cloned()
+    // }
 
     fn skip_whitespace(&mut self) -> Result<u8, Error> {
         while self.peek().ok_or(Error::Eof)?.is_ascii_whitespace() {

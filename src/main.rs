@@ -3,27 +3,12 @@ mod compiler;
 mod lexer;
 mod vm;
 
-#[derive(Debug, Clone)]
-enum ApplicationError {
-    MissingArgument,
-    CannotReadFile(String),
-}
-
-impl std::fmt::Display for ApplicationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for ApplicationError {}
-
-fn main() -> Result<(), ApplicationError> {
-    let src_path = std::env::args()
-        .nth(1)
-        .ok_or(ApplicationError::MissingArgument)?;
-    let src = std::fs::read(&src_path)
-        .map_err(|_| ApplicationError::CannotReadFile(src_path))?
-        .leak();
-    app::run(src);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let src_path = std::env::args().nth(1).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Missing file name")
+    })?;
+    let src = std::fs::read(src_path)?.leak();
+    let res = app::run(src)?;
+    println!("Result of computation: {}", res);
     Ok(())
 }
