@@ -55,16 +55,15 @@ impl VirtualMachine {
         opcodes[self.instruction_pointer - 1]
     }
 
+    fn advance_instruction_by<'a>(&mut self, opcodes: &'a [u8], n_bytes: usize) -> &'a [u8] {
+        let bytes = &opcodes[self.instruction_pointer..self.instruction_pointer + n_bytes];
+        self.instruction_pointer += n_bytes;
+        bytes
+    }
+
     fn number(&mut self, opcodes: &[u8]) {
-        let b0 = self.advance_instruction(opcodes);
-        let b1 = self.advance_instruction(opcodes);
-        let b2 = self.advance_instruction(opcodes);
-        let b3 = self.advance_instruction(opcodes);
-        let b4 = self.advance_instruction(opcodes);
-        let b5 = self.advance_instruction(opcodes);
-        let b6 = self.advance_instruction(opcodes);
-        let b7 = self.advance_instruction(opcodes);
-        let num = parse_number(&[b0, b1, b2, b3, b4, b5, b6, b7]);
+        let bytes = self.advance_instruction_by(opcodes, 8);
+        let num = parse_number(bytes);
         self.stack.push(num);
     }
 
