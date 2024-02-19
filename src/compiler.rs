@@ -31,6 +31,7 @@ impl From<LexerError> for Error {
 }
 
 #[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
     // NOTE: a number is a 64 bit float/u64. Maybe if
     // it is an integer and for e.g. in [0, 255] could
@@ -40,7 +41,7 @@ pub enum Op {
     Minus = 2,
     Mult = 3,
     Div = 4,
-    Negate = 6,
+    Negate = 5,
 }
 
 impl From<Op> for u8 {

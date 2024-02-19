@@ -1,6 +1,7 @@
 mod app;
 mod compiler;
 mod lexer;
+mod vm;
 
 #[derive(Debug, Clone)]
 enum ApplicationError {
