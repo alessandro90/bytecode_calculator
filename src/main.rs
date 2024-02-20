@@ -1,7 +1,4 @@
-mod app;
-mod compiler;
-mod lexer;
-mod vm;
+use vm_calculator::app;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let src_path = std::env::args().nth(1).ok_or_else(|| {
