@@ -22,9 +22,7 @@ impl<'a> From<Token<'a>> for String {
         match value {
             Token::Div => "/".to_string(),
             Token::Mult => "*".to_string(),
-            Token::Number(digits) => {
-                String::from_utf8(digits.to_vec()).expect("Cannot convert invalid &[u8] to string")
-            }
+            Token::Number(digits) => String::from_utf8_lossy(digits).into_owned(),
             Token::Plus => "+".to_string(),
             Token::Minus => "-".to_string(),
             Token::LeftParen => "(".to_string(),
@@ -103,7 +101,7 @@ impl<'a> Lexer<'a> {
         self.src_index += 1;
     }
 
-    fn consume_token<'b: 'a>(&mut self, t: Token<'b>, bytes: usize) -> Token<'b> {
+    fn consume_token<'b>(&mut self, t: Token<'b>, bytes: usize) -> Token<'b> {
         for _ in 0..bytes {
             self.advance();
         }

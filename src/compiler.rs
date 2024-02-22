@@ -103,16 +103,12 @@ impl<'a> Default for Compiler<'a> {
     }
 }
 
-impl<'a> Compiler<'a> {
+impl<'a, 'b: 'a> Compiler<'a> {
     pub fn opcodes(&self) -> &[u8] {
         &self.chunk
     }
 
-    pub fn expression<'b: 'a>(
-        &mut self,
-        lexer: &mut impl Scan<'b>,
-        priority: Priority,
-    ) -> CompilerResult {
+    pub fn expression(&mut self, lexer: &mut impl Scan<'b>, priority: Priority) -> CompilerResult {
         self.advance(lexer)?;
         if let Some(prev) = self.prev_token {
             match prev {
@@ -139,11 +135,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn parse_binary<'b: 'a>(
-        &mut self,
-        lexer: &mut impl Scan<'b>,
-        tok: Token<'a>,
-    ) -> CompilerResult {
+    fn parse_binary(&mut self, lexer: &mut impl Scan<'b>, tok: Token<'a>) -> CompilerResult {
         self.expression(lexer, tok.priority().next())?;
         match tok {
             Token::Minus => {
@@ -166,7 +158,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn advance<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
+    fn advance(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.prev_token = self.current_token;
         let tok = lexer.scan();
         self.current_token = tok.ok();
@@ -182,7 +174,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn consume<'b: 'a>(
+    fn consume(
         &mut self,
         lexer: &mut impl Scan<'b>,
         target: Token<'b>,
@@ -195,13 +187,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn parse_group<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
+    fn parse_group(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.expression(lexer, Priority::Term)?;
         self.consume(lexer, Token::RightParen, Error::UnterminedGroup)?;
         Ok(())
     }
 
-    fn emit_unary<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
+    fn emit_unary(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.expression(lexer, Priority::Unary)?;
         self.chunk.push(Op::Negate.into());
         Ok(())
