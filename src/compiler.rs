@@ -7,7 +7,6 @@ pub trait Compile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     FromLexer(LexerError),
-    InvalidOpCode(u8),
     InvalidNumber(Vec<u8>),
     InvalidTokenBefore { prev: Token, current: Option<Token> },
     UnterminedGroup,
@@ -49,8 +48,11 @@ impl From<Op> for u8 {
     }
 }
 
+#[derive(Debug)]
+pub struct InvalidOpcode(u8);
+
 impl TryFrom<u8> for Op {
-    type Error = Error;
+    type Error = InvalidOpcode;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Op::Number),
@@ -59,7 +61,7 @@ impl TryFrom<u8> for Op {
             3 => Ok(Op::Mult),
             4 => Ok(Op::Div),
             5 => Ok(Op::Negate),
-            x => Err(Error::InvalidOpCode(x)),
+            x => Err(InvalidOpcode(x)),
         }
     }
 }

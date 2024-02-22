@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::fmt::Display;
 
 use crate::compiler::Op;
@@ -38,7 +37,7 @@ impl VirtualMachine {
         while self.instruction_pointer < opcodes.len() {
             let byte = self.advance_instruction(opcodes);
             let op = Op::try_from(byte)
-                .unwrap_or_else(|e| panic!("Invalid opcode {}, error: {}", byte, e));
+                .unwrap_or_else(|e| panic!("Invalid opcode {}, error: {:?}", byte, e));
             match op {
                 Op::Number => self.number(opcodes),
                 Op::Negate => self.negate(),

@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FuncType {
     Sqrt,
