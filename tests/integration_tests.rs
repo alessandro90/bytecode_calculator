@@ -2,7 +2,7 @@ extern crate vm_calculator;
 
 use vm_calculator::{
     compiler::{self, Compile, Compiler},
-    lexer::{self, Lexer},
+    lexer::Lexer,
     vm::{self, VirtualMachine},
 };
 
@@ -69,7 +69,7 @@ fn test_empty_group() {
     assert_eq!(
         compiled.unwrap_err(),
         compiler::Error::InvalidTokenBefore {
-            prev: lexer::Token::RightParen,
+            prev: ")".to_string(),
             current: None
         }
     );

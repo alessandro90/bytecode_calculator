@@ -5,8 +5,8 @@ pub enum FuncType {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Token {
-    Number(&'static [u8]),
+pub enum Token<'a> {
+    Number(&'a [u8]),
     LeftParen,
     RightParen,
     Plus,
@@ -15,6 +15,22 @@ pub enum Token {
     Div,
     // TODO:
     // Func(FuncType)
+}
+
+impl<'a> From<Token<'a>> for String {
+    fn from(value: Token) -> Self {
+        match value {
+            Token::Div => "/".to_string(),
+            Token::Mult => "*".to_string(),
+            Token::Number(digits) => {
+                String::from_utf8(digits.to_vec()).expect("Cannot convert invalid &[u8] to string")
+            }
+            Token::Plus => "+".to_string(),
+            Token::Minus => "-".to_string(),
+            Token::LeftParen => "(".to_string(),
+            Token::RightParen => ")".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,7 +56,7 @@ impl Priority {
     }
 }
 
-impl Token {
+impl<'a> Token<'a> {
     pub fn priority(&self) -> Priority {
         match self {
             Token::Number(_) => Priority::Number,
@@ -69,28 +85,25 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub trait Scan {
-    fn scan(&mut self) -> Result<Token, Error>;
+pub trait Scan<'a> {
+    fn scan(&mut self) -> Result<Token<'a>, Error>;
 }
 
-pub struct Lexer {
-    src: &'static [u8],
+pub struct Lexer<'a> {
+    src: &'a [u8],
     src_index: usize,
 }
 
-impl Lexer {
-    pub fn new(value: &'static [u8]) -> Self {
-        Lexer {
-            src: value,
-            src_index: 0,
-        }
+impl<'a> Lexer<'a> {
+    pub fn new(src: &'a [u8]) -> Self {
+        Lexer { src, src_index: 0 }
     }
 
     fn advance(&mut self) {
         self.src_index += 1;
     }
 
-    fn consume_token(&mut self, t: Token, bytes: usize) -> Token {
+    fn consume_token<'b: 'a>(&mut self, t: Token<'b>, bytes: usize) -> Token<'b> {
         for _ in 0..bytes {
             self.advance();
         }
@@ -112,15 +125,10 @@ impl Lexer {
         Ok(self.src[self.src_index])
     }
 
-    fn consume_number(&mut self) -> Result<Token, Error> {
+    fn consume_number(&mut self) -> Result<Token<'a>, Error> {
         #[inline(always)]
-        fn err(c: u8) -> Result<Token, Error> {
+        fn err<'b>(c: u8) -> Result<Token<'b>, Error> {
             Err(Error::InvalidNumberFormat(c as char))
-        }
-
-        #[inline(always)]
-        fn number(l: &Lexer, begin: usize) -> Result<Token, Error> {
-            Ok(Token::Number(&l.src[begin..l.src_index]))
         }
 
         let begin = self.src_index;
@@ -147,17 +155,18 @@ impl Lexer {
                 if prev.is_some_and(|p| p == b'e' || p == b'.') {
                     return err(c);
                 }
-                return number(self, begin);
+                // return number(self, begin);
+                return Ok(Token::Number(&self.src[begin..self.src_index]));
             }
             self.advance();
             prev = Some(c);
         }
-        number(self, begin)
+        Ok(Token::Number(&self.src[begin..self.src_index]))
     }
 }
 
-impl Scan for Lexer {
-    fn scan(&mut self) -> Result<Token, Error> {
+impl<'a> Scan<'a> for Lexer<'a> {
+    fn scan(&mut self) -> Result<Token<'a>, Error> {
         let c = self.skip_whitespace()?;
         if c.is_ascii_digit() {
             return self.consume_number();

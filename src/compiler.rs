@@ -1,17 +1,20 @@
 use crate::lexer::{Error as LexerError, Priority, Scan, Token};
 
-pub trait Compile {
-    fn compile(&mut self, lexer: &mut impl Scan) -> Result<(), Error>;
+pub trait Compile<'a> {
+    fn compile<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> Result<(), Error>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     FromLexer(LexerError),
     InvalidNumber(Vec<u8>),
-    InvalidTokenBefore { prev: Token, current: Option<Token> },
+    InvalidTokenBefore {
+        prev: String,
+        current: Option<String>,
+    },
     UnterminedGroup,
     MissingExpression,
-    InvalidToken(Token),
+    InvalidToken(String),
 }
 
 impl std::fmt::Display for Error {
@@ -66,16 +69,16 @@ impl TryFrom<u8> for Op {
     }
 }
 
-pub struct Compiler {
-    prev_token: Option<Token>,
-    current_token: Option<Token>,
+pub struct Compiler<'a> {
+    prev_token: Option<Token<'a>>,
+    current_token: Option<Token<'a>>,
     chunk: Vec<u8>,
 }
 
 pub type CompilerResult = Result<(), Error>;
 
-impl Compile for Compiler {
-    fn compile(&mut self, lexer: &mut impl Scan) -> CompilerResult {
+impl<'a> Compile<'a> for Compiler<'a> {
+    fn compile<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.advance(lexer)?;
         self.expression(lexer, Priority::Term)?;
         match self.current_token {
@@ -89,7 +92,7 @@ impl Compile for Compiler {
 
 const INITIAL_CHUNK_SIZE: usize = 100;
 
-impl Default for Compiler {
+impl<'a> Default for Compiler<'a> {
     fn default() -> Self {
         let chunk = Vec::with_capacity(INITIAL_CHUNK_SIZE);
         Self {
@@ -100,12 +103,16 @@ impl Default for Compiler {
     }
 }
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     pub fn opcodes(&self) -> &[u8] {
         &self.chunk
     }
 
-    pub fn expression(&mut self, lexer: &mut impl Scan, priority: Priority) -> CompilerResult {
+    pub fn expression<'b: 'a>(
+        &mut self,
+        lexer: &mut impl Scan<'b>,
+        priority: Priority,
+    ) -> CompilerResult {
         self.advance(lexer)?;
         if let Some(prev) = self.prev_token {
             match prev {
@@ -113,8 +120,8 @@ impl Compiler {
                 Token::Number(num_str) => self.emit_number(num_str),
                 Token::LeftParen => self.parse_group(lexer),
                 t => Err(Error::InvalidTokenBefore {
-                    prev: t,
-                    current: self.current_token,
+                    prev: t.into(),
+                    current: self.current_token.map(|tok| tok.into()),
                 }),
             }?;
         }
@@ -125,14 +132,18 @@ impl Compiler {
                     Token::Div | Token::Plus | Token::Mult | Token::Minus => {
                         self.parse_binary(lexer, prev)
                     }
-                    t => Err(Error::InvalidToken(t)),
+                    t => Err(Error::InvalidToken(t.into())),
                 }?;
             }
         }
         Ok(())
     }
 
-    fn parse_binary(&mut self, lexer: &mut impl Scan, tok: Token) -> CompilerResult {
+    fn parse_binary<'b: 'a>(
+        &mut self,
+        lexer: &mut impl Scan<'b>,
+        tok: Token<'a>,
+    ) -> CompilerResult {
         self.expression(lexer, tok.priority().next())?;
         match tok {
             Token::Minus => {
@@ -151,11 +162,11 @@ impl Compiler {
                 self.chunk.push(Op::Mult.into());
                 Ok(())
             }
-            t => Err(Error::InvalidToken(t)),
+            t => Err(Error::InvalidToken(t.into())),
         }
     }
 
-    fn advance(&mut self, lexer: &mut impl Scan) -> CompilerResult {
+    fn advance<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.prev_token = self.current_token;
         let tok = lexer.scan();
         self.current_token = tok.ok();
@@ -171,7 +182,12 @@ impl Compiler {
         }
     }
 
-    fn consume(&mut self, lexer: &mut impl Scan, target: Token, err: Error) -> CompilerResult {
+    fn consume<'b: 'a>(
+        &mut self,
+        lexer: &mut impl Scan<'b>,
+        target: Token<'b>,
+        err: Error,
+    ) -> CompilerResult {
         if self.current_token.is_some_and(|tok| tok == target) {
             self.advance(lexer)
         } else {
@@ -179,13 +195,13 @@ impl Compiler {
         }
     }
 
-    fn parse_group(&mut self, lexer: &mut impl Scan) -> CompilerResult {
+    fn parse_group<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.expression(lexer, Priority::Term)?;
         self.consume(lexer, Token::RightParen, Error::UnterminedGroup)?;
         Ok(())
     }
 
-    fn emit_unary(&mut self, lexer: &mut impl Scan) -> CompilerResult {
+    fn emit_unary<'b: 'a>(&mut self, lexer: &mut impl Scan<'b>) -> CompilerResult {
         self.expression(lexer, Priority::Unary)?;
         self.chunk.push(Op::Negate.into());
         Ok(())
@@ -214,13 +230,13 @@ impl Compiler {
 mod compiler_tests {
     use super::*;
 
-    struct MockLexer {
-        scan_results: Vec<Token>,
+    struct MockLexer<'a> {
+        scan_results: Vec<Token<'a>>,
         index: usize,
     }
 
-    impl MockLexer {
-        fn new(tokens: Vec<Token>) -> Self {
+    impl<'a> MockLexer<'a> {
+        fn new(tokens: Vec<Token<'a>>) -> Self {
             Self {
                 scan_results: tokens,
                 index: 0,
@@ -228,8 +244,8 @@ mod compiler_tests {
         }
     }
 
-    impl Scan for MockLexer {
-        fn scan(&mut self) -> Result<Token, LexerError> {
+    impl<'a> Scan<'a> for MockLexer<'a> {
+        fn scan(&mut self) -> Result<Token<'a>, LexerError> {
             if self.index < self.scan_results.len() {
                 let tok = self.scan_results[self.index];
                 self.index += 1;

@@ -30,7 +30,7 @@ impl From<VMError> for ApplicationError {
     }
 }
 
-pub fn run(src: &'static [u8]) -> Result<f64, ApplicationError> {
+pub fn run(src: &[u8]) -> Result<f64, ApplicationError> {
     let mut lexer = Lexer::new(src);
     let mut compiler = Compiler::default();
     compiler.compile(&mut lexer)?;
