@@ -13,6 +13,7 @@ const STACK_INITIAL_CAPACITY: usize = 256;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     DivisionByZero,
+    EmptyStack,
 }
 
 impl Display for Error {
@@ -23,14 +24,16 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-impl VirtualMachine {
-    pub fn new() -> Self {
+impl Default for VirtualMachine {
+    fn default() -> Self {
         Self {
             instruction_pointer: 0,
             stack: Vec::with_capacity(STACK_INITIAL_CAPACITY),
         }
     }
+}
 
+impl VirtualMachine {
     pub fn interpret(&mut self, opcodes: &[u8]) -> Result<f64, Error> {
         while self.instruction_pointer < opcodes.len() {
             let byte = self.advance_instruction(opcodes);
@@ -42,7 +45,7 @@ impl VirtualMachine {
                 Op::Minus | Op::Plus | Op::Mult | Op::Div => self.binary(op)?,
             };
         }
-        Ok(self.stack_pop("Empty stack for final result"))
+        self.stack.pop().ok_or(Error::EmptyStack)
     }
 
     #[inline(always)]
@@ -129,7 +132,7 @@ mod vm_tests {
 
     #[test]
     fn test_single_number() {
-        let mut vm = VirtualMachine::new();
+        let mut vm = VirtualMachine::default();
         let mut opcodes: Vec<_> = vec![Op::Number.into()];
         let n = 1.0f64;
         opcodes.append(&mut number_to_bytes(n));
@@ -140,7 +143,7 @@ mod vm_tests {
 
     #[test]
     fn test_negation() {
-        let mut vm = VirtualMachine::new();
+        let mut vm = VirtualMachine::default();
         let mut opcodes = vec![Op::Number.into()];
         let n = 1.0f64;
         opcodes.append(&mut number_to_bytes(n));
@@ -152,7 +155,7 @@ mod vm_tests {
 
     #[test]
     fn test_addition() {
-        let mut vm = VirtualMachine::new();
+        let mut vm = VirtualMachine::default();
 
         let mut opcodes = vec![Op::Number.into()];
         let a = 1.0f64;
@@ -172,7 +175,7 @@ mod vm_tests {
     #[test]
     fn test_complex_expression() {
         // -(1 + 2) * 3 / (2 * 3 - (1 / 2)) + 1 = -0.6363
-        let mut vm = VirtualMachine::new();
+        let mut vm = VirtualMachine::default();
         let mut opcodes = vec![Op::Number.into()];
         opcodes.append(&mut number_to_bytes(1.0));
         opcodes.push(Op::Number.into());

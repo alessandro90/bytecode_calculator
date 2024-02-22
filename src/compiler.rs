@@ -11,7 +11,6 @@ pub enum Error {
     InvalidNumber(Vec<u8>),
     InvalidTokenBefore { prev: Token, current: Option<Token> },
     UnterminedGroup,
-    EmptyGroup,
     MissingExpression,
     InvalidToken(Token),
 }
@@ -88,8 +87,8 @@ impl Compile for Compiler {
 
 const INITIAL_CHUNK_SIZE: usize = 100;
 
-impl Compiler {
-    pub fn new() -> Self {
+impl Default for Compiler {
+    fn default() -> Self {
         let chunk = Vec::with_capacity(INITIAL_CHUNK_SIZE);
         Self {
             chunk,
@@ -97,7 +96,9 @@ impl Compiler {
             current_token: None,
         }
     }
+}
 
+impl Compiler {
     pub fn opcodes(&self) -> &[u8] {
         &self.chunk
     }
@@ -177,15 +178,9 @@ impl Compiler {
     }
 
     fn parse_group(&mut self, lexer: &mut impl Scan) -> CompilerResult {
-        let chunk_len_before = self.chunk.len();
         self.expression(lexer, Priority::Term)?;
         self.consume(lexer, Token::RightParen, Error::UnterminedGroup)?;
-        let chunk_len_after = self.chunk.len();
-        if chunk_len_before == chunk_len_after {
-            Err(Error::EmptyGroup)
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     fn emit_unary(&mut self, lexer: &mut impl Scan) -> CompilerResult {
@@ -258,7 +253,7 @@ mod compiler_tests {
     #[test]
     fn test_single_number() {
         let mut lexer = MockLexer::new(vec![Token::Number(b"1")]);
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
         assert_eq!(compiler.chunk[0], Op::Number.into());
@@ -270,7 +265,7 @@ mod compiler_tests {
     #[test]
     fn test_single_negative_number() {
         let mut lexer = MockLexer::new(vec![Token::Minus, Token::Number(b"1")]);
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
         assert_eq!(compiler.chunk[0], Op::Number.into());
@@ -282,7 +277,7 @@ mod compiler_tests {
     #[test]
     fn test_sum_of_two_numbers() {
         let mut lexer = MockLexer::new(vec![Token::Number(b"1"), Token::Plus, Token::Number(b"2")]);
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
         assert_eq!(compiler.chunk[0], Op::Number.into());
@@ -307,7 +302,7 @@ mod compiler_tests {
             Token::Number(b"1.5"),
             Token::RightParen,
         ]);
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
         assert_eq!(compiler.chunk[0], Op::Number.into());
@@ -344,7 +339,7 @@ mod compiler_tests {
             Token::Number(b"1"),
         ]);
 
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
 

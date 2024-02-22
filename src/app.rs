@@ -32,8 +32,8 @@ impl From<VMError> for ApplicationError {
 
 pub fn run(src: &'static [u8]) -> Result<f64, ApplicationError> {
     let mut lexer = Lexer::new(src);
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::default();
     compiler.compile(&mut lexer)?;
-    let mut vm = VirtualMachine::new();
+    let mut vm = VirtualMachine::default();
     vm.interpret(compiler.opcodes()).map_err(|e| e.into())
 }
