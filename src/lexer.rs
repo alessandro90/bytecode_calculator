@@ -2,6 +2,19 @@
 pub enum FuncType {
     Sqrt,
     Log,
+    Sin,
+    Cos,
+}
+
+impl From<FuncType> for String {
+    fn from(value: FuncType) -> Self {
+        match value {
+            FuncType::Log => "Log".into(),
+            FuncType::Sin => "sin".into(),
+            FuncType::Cos => "cos".into(),
+            FuncType::Sqrt => "sqrt".into(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -13,8 +26,8 @@ pub enum Token<'a> {
     Minus,
     Mult,
     Div,
-    // TODO:
-    // Func(FuncType)
+    Func(FuncType),
+    Comma,
 }
 
 impl<'a> From<Token<'a>> for String {
@@ -27,6 +40,8 @@ impl<'a> From<Token<'a>> for String {
             Token::Minus => "-".to_string(),
             Token::LeftParen => "(".to_string(),
             Token::RightParen => ")".to_string(),
+            Token::Func(f) => f.into(),
+            Token::Comma => ",".to_string(),
         }
     }
 }
@@ -34,6 +49,7 @@ impl<'a> From<Token<'a>> for String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
     Null,
+    Comma,
     Number,
     Term,
     Factor,
@@ -44,7 +60,8 @@ pub enum Priority {
 impl Priority {
     pub fn next(&self) -> Self {
         match self {
-            Self::Null => Self::Number,
+            Self::Null => Self::Comma,
+            Self::Comma => Self::Number,
             Self::Number => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
@@ -57,7 +74,9 @@ impl Priority {
 impl<'a> Token<'a> {
     pub fn priority(&self) -> Priority {
         match self {
+            Token::Comma => Priority::Null,
             Token::Number(_) => Priority::Number,
+            Token::Func(_) => Priority::Factor,
             Token::LeftParen => Priority::Group,
             Token::RightParen => Priority::Null,
             Token::Plus => Priority::Term,
@@ -112,9 +131,9 @@ impl<'a> Lexer<'a> {
         self.src.get(self.src_index).cloned()
     }
 
-    // fn peek_after(&self, after: usize) -> Option<u8> {
-    //     self.src.get(self.src_index + after).cloned()
-    // }
+    fn peek_word(&self, ch_len: usize) -> &[u8] {
+        &self.src[self.src_index..self.src_index + ch_len]
+    }
 
     fn skip_whitespace(&mut self) -> Result<u8, Error> {
         while self.peek().ok_or(Error::Eof)?.is_ascii_whitespace() {
@@ -161,6 +180,38 @@ impl<'a> Lexer<'a> {
         }
         Ok(Token::Number(&self.src[begin..self.src_index]))
     }
+
+    fn parse_fn(&mut self, first_ch: u8) -> Result<Token<'a>, Error> {
+        #[inline(always)]
+        fn err<'b>(t: u8) -> Result<Token<'b>, Error> {
+            Err(Error::InvalidChar(t as char))
+        }
+
+        match first_ch {
+            b's' => {
+                if self.peek_word(3) == b"sin" {
+                    return Ok(self.consume_token(Token::Func(FuncType::Sin), 3));
+                }
+                if self.peek_word(4) == b"sqrt" {
+                    return Ok(self.consume_token(Token::Func(FuncType::Sqrt), 4));
+                }
+                err(first_ch)
+            }
+            b'c' => {
+                if self.peek_word(3) == b"cos" {
+                    return Ok(self.consume_token(Token::Func(FuncType::Cos), 3));
+                }
+                err(first_ch)
+            }
+            b'l' => {
+                if self.peek_word(3) == b"log" {
+                    return Ok(self.consume_token(Token::Func(FuncType::Log), 3));
+                }
+                err(first_ch)
+            }
+            _ => err(first_ch),
+        }
+    }
 }
 
 impl<'a> Scan<'a> for Lexer<'a> {
@@ -176,7 +227,8 @@ impl<'a> Scan<'a> for Lexer<'a> {
             b'-' => Ok(self.consume_token(Token::Minus, 1)),
             b'*' => Ok(self.consume_token(Token::Mult, 1)),
             b'/' => Ok(self.consume_token(Token::Div, 1)),
-            invalid => Err(Error::InvalidChar(invalid as char)),
+            b',' => Ok(self.consume_token(Token::Comma, 1)),
+            ch => self.parse_fn(ch),
         }
     }
 }
@@ -334,5 +386,50 @@ mod lexer_tests {
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
+    }
+
+    #[test]
+    fn test_comma() {
+        let mut l = Lexer::new(b",".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Comma);
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
+
+    #[test]
+    fn test_sin() {
+        let mut l = Lexer::new(b"sin".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Func(FuncType::Sin));
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
+
+    #[test]
+    fn test_cos() {
+        let mut l = Lexer::new(b"cos".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Func(FuncType::Cos));
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
+
+    #[test]
+    fn test_log() {
+        let mut l = Lexer::new(b"log".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Func(FuncType::Log));
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
+
+    #[test]
+    fn test_sqrt() {
+        let mut l = Lexer::new(b"sqrt".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Func(FuncType::Sqrt));
+        assert_eq!(l.scan(), Err(Error::Eof))
     }
 }
