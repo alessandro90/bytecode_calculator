@@ -2,11 +2,6 @@ use std::fmt::Display;
 
 use crate::compiler::Op;
 
-pub struct VirtualMachine {
-    instruction_pointer: usize,
-    stack: Vec<f64>,
-}
-
 const STACK_INITIAL_CAPACITY: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +17,11 @@ impl Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+pub struct VirtualMachine {
+    instruction_pointer: usize,
+    stack: Vec<f64>,
+}
 
 impl Default for VirtualMachine {
     fn default() -> Self {
@@ -44,6 +44,7 @@ impl VirtualMachine {
                 Op::Minus | Op::Plus | Op::Mult | Op::Div => self.binary(op)?,
             };
         }
+        // reset for further calls
         self.stack.pop().ok_or(Error::EmptyStack)
     }
 

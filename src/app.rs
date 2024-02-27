@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 use crate::{
     compiler::{Compile, Compiler, Error as CompilerError},
     lexer::Lexer,
@@ -36,4 +38,30 @@ pub fn run(src: &[u8]) -> Result<f64, ApplicationError> {
     compiler.compile(&mut lexer)?;
     let mut vm = VirtualMachine::default();
     vm.interpret(compiler.opcodes()).map_err(|e| e.into())
+}
+
+pub fn run_repl() {
+    loop {
+        print!(">> ");
+        io::stdout().flush().unwrap();
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_err() {
+            continue;
+        }
+        if input == "\n" || input == "\r\n" {
+            continue;
+        }
+        let bytes = input.as_bytes();
+        let mut lexer = Lexer::new(bytes);
+        let mut compiler = Compiler::default();
+        let mut vm = VirtualMachine::default();
+        if let Err(e) = compiler.compile(&mut lexer) {
+            eprintln!("Compiler error: {}", e);
+            continue;
+        }
+        match vm.interpret(compiler.opcodes()) {
+            Ok(value) => println!("$ {}", value),
+            Err(e) => eprintln!("Virtual machine error: {}", e),
+        };
+    }
 }

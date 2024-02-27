@@ -81,10 +81,9 @@ impl<'a> Compile<'a> for Compiler<'a> {
     fn compile(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
         self.advance(lexer)?;
         self.expression(lexer, Priority::Term)?;
+
         match self.current_token {
-            Some(t) => {
-                panic!("Invalid last token: {:?}", t);
-            }
+            Some(t) => Err(Error::InvalidToken(t.into())),
             None => Ok(()),
         }
     }

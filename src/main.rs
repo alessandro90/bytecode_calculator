@@ -1,11 +1,13 @@
-use vm_calculator::app;
+use vm_calculator::app::{self, run_repl};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let src_path = std::env::args().nth(1).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Missing file name")
-    })?;
-    let src = std::fs::read(src_path)?;
-    let res = app::run(&src)?;
-    println!("Result of computation: {}", res);
+    match std::env::args().nth(1) {
+        Some(src_path) => {
+            let src = std::fs::read(src_path)?;
+            let res = app::run(&src)?;
+            println!("Result of computation: {}", res);
+        }
+        None => run_repl(),
+    };
     Ok(())
 }
