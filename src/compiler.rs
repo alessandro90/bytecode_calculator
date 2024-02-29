@@ -1,4 +1,4 @@
-use crate::lexer::{Error as LexerError, Priority, Scan, Token};
+use crate::lexer::{Error as LexerError, FuncType, Priority, Scan, Token};
 
 pub trait Compile<'a> {
     fn compile(&mut self, lexer: &mut impl Scan<'a>) -> Result<(), Error>;
@@ -15,6 +15,7 @@ pub enum Error {
     UnterminedGroup,
     MissingExpression,
     InvalidToken(String),
+    MissingFunctionParen,
 }
 
 impl std::fmt::Display for Error {
@@ -43,6 +44,7 @@ pub enum Op {
     Mult = 3,
     Div = 4,
     Negate = 5,
+    Func = 6,
 }
 
 impl From<Op> for u8 {
@@ -64,6 +66,7 @@ impl TryFrom<u8> for Op {
             3 => Ok(Op::Mult),
             4 => Ok(Op::Div),
             5 => Ok(Op::Negate),
+            6 => Ok(Op::Func),
             x => Err(InvalidOpcode(x)),
         }
     }
@@ -114,6 +117,7 @@ impl<'a> Compiler<'a> {
                 Token::Minus => self.emit_unary(lexer),
                 Token::Number(num_str) => self.emit_number(num_str),
                 Token::LeftParen => self.parse_group(lexer),
+                Token::Func(func_type) => self.parse_fn(lexer, func_type),
                 t => Err(Error::InvalidTokenBefore {
                     prev: t.into(),
                     current: self.current_token.map(|tok| tok.into()),
@@ -189,6 +193,14 @@ impl<'a> Compiler<'a> {
     fn parse_group(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
         self.expression(lexer, Priority::Term)?;
         self.consume(lexer, Token::RightParen, Error::UnterminedGroup)?;
+        Ok(())
+    }
+
+    fn parse_fn(&mut self, lexer: &mut impl Scan<'a>, func_type: FuncType) -> CompilerResult {
+        self.consume(lexer, Token::LeftParen, Error::MissingFunctionParen)?;
+        self.parse_group(lexer)?;
+        self.chunk.push(Op::Func.into());
+        self.chunk.push(func_type.into());
         Ok(())
     }
 
@@ -385,5 +397,81 @@ mod compiler_tests {
         assert_eq!(float, 1.0);
 
         assert_eq!(compiler.chunk[58], Op::Minus.into());
+    }
+
+    #[test]
+    fn test_sin() {
+        let mut lexer = MockLexer::new(vec![
+            Token::Func(FuncType::Sin),
+            Token::LeftParen,
+            Token::Number(b"4"),
+            Token::RightParen,
+        ]);
+
+        let mut compiler = Compiler::default();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 4.0);
+        assert_eq!(compiler.chunk[9], Op::Func.into());
+        assert_eq!(compiler.chunk[10], FuncType::Sin.into());
+    }
+
+    #[test]
+    fn test_cos() {
+        let mut lexer = MockLexer::new(vec![
+            Token::Func(FuncType::Cos),
+            Token::LeftParen,
+            Token::Number(b"4"),
+            Token::RightParen,
+        ]);
+
+        let mut compiler = Compiler::default();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 4.0);
+        assert_eq!(compiler.chunk[9], Op::Func.into());
+        assert_eq!(compiler.chunk[10], FuncType::Cos.into());
+    }
+
+    #[test]
+    fn test_log() {
+        let mut lexer = MockLexer::new(vec![
+            Token::Func(FuncType::Log),
+            Token::LeftParen,
+            Token::Number(b"4"),
+            Token::RightParen,
+        ]);
+
+        let mut compiler = Compiler::default();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 4.0);
+        assert_eq!(compiler.chunk[9], Op::Func.into());
+        assert_eq!(compiler.chunk[10], FuncType::Log.into());
+    }
+
+    #[test]
+    fn test_sqrt() {
+        let mut lexer = MockLexer::new(vec![
+            Token::Func(FuncType::Sqrt),
+            Token::LeftParen,
+            Token::Number(b"4"),
+            Token::RightParen,
+        ]);
+
+        let mut compiler = Compiler::default();
+        let res = compiler.compile(&mut lexer);
+        assert!(res.is_ok());
+        assert_eq!(compiler.chunk[0], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[1..=8]);
+        assert_eq!(float, 4.0);
+        assert_eq!(compiler.chunk[9], Op::Func.into());
+        assert_eq!(compiler.chunk[10], FuncType::Sqrt.into());
     }
 }

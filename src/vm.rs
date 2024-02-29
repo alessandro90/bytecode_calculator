@@ -1,13 +1,23 @@
 use std::fmt::Display;
 
-use crate::compiler::Op;
+use crate::{compiler::Op, lexer::FuncType};
 
 const STACK_INITIAL_CAPACITY: usize = 256;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FuncArgs {
+    Arg1(f64),
+    Arg2(f64, f64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Error {
     DivisionByZero,
     EmptyStack,
+    InvalidFunctionArgs {
+        func_type: FuncType,
+        func_args: FuncArgs,
+    },
 }
 
 impl Display for Error {
@@ -42,10 +52,53 @@ impl VirtualMachine {
                 Op::Number => self.number(opcodes),
                 Op::Negate => self.negate(),
                 Op::Minus | Op::Plus | Op::Mult | Op::Div => self.binary(op)?,
+                Op::Func => self.function(opcodes)?,
             };
         }
         // reset for further calls
         self.stack.pop().ok_or(Error::EmptyStack)
+    }
+
+    fn function(&mut self, opcodes: &[u8]) -> Result<(), Error> {
+        let func_type = self.advance_instruction(opcodes);
+        let func_type = FuncType::try_from(func_type)
+            .unwrap_or_else(|e| panic!("Invalid byte function code {:?}", e));
+        match func_type {
+            FuncType::Log => {
+                let arg = self.stack_pop("Missing function argument (Log)");
+                let val = arg.ln();
+                if !val.is_finite() {
+                    return Err(Error::InvalidFunctionArgs {
+                        func_type,
+                        func_args: FuncArgs::Arg1(arg),
+                    });
+                }
+                self.stack.push(val);
+                Ok(())
+            }
+            FuncType::Sin => {
+                let arg = self.stack_pop("Missing function argument (Log)");
+                self.stack.push(arg.sin());
+                Ok(())
+            }
+            FuncType::Cos => {
+                let arg = self.stack_pop("Missing function argument (Log)");
+                self.stack.push(arg.cos());
+                Ok(())
+            }
+            FuncType::Sqrt => {
+                let arg = self.stack_pop("Missing function argument (Log)");
+                let val = arg.sqrt();
+                if val.is_nan() {
+                    return Err(Error::InvalidFunctionArgs {
+                        func_type,
+                        func_args: FuncArgs::Arg1(arg),
+                    });
+                }
+                self.stack.push(val);
+                Ok(())
+            }
+        }
     }
 
     #[inline(always)]
@@ -108,7 +161,7 @@ fn parse_number(bytes: &[u8]) -> f64 {
 
 #[cfg(test)]
 mod vm_tests {
-    use crate::compiler::Op;
+    use crate::{compiler::Op, lexer::FuncType};
 
     use super::VirtualMachine;
 
@@ -216,5 +269,93 @@ mod vm_tests {
         let res = vm.interpret(&opcodes);
         assert!(res.is_ok());
         assert_float_eq!(res.unwrap(), -0.6363f64, 1e-4f64);
+    }
+
+    #[test]
+    fn test_function_sin() {
+        let mut vm = VirtualMachine::default();
+
+        let n = 10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Sin.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_float_eq!(res.unwrap(), n.sin());
+    }
+
+    #[test]
+    fn test_function_cos() {
+        let mut vm = VirtualMachine::default();
+
+        let n = 10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Cos.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_float_eq!(res.unwrap(), n.cos());
+    }
+
+    #[test]
+    fn test_function_log() {
+        let mut vm = VirtualMachine::default();
+
+        let n = 10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Log.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_float_eq!(res.unwrap(), n.ln());
+    }
+
+    #[test]
+    fn test_function_log_invalid() {
+        let mut vm = VirtualMachine::default();
+
+        let n = -10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Log.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_function_sqrt() {
+        let mut vm = VirtualMachine::default();
+
+        let n = 10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Sqrt.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_float_eq!(res.unwrap(), n.sqrt());
+    }
+
+    #[test]
+    fn test_function_sqrt_invalid() {
+        let mut vm = VirtualMachine::default();
+
+        let n = -10f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(n));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Sqrt.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_err());
     }
 }

@@ -1,4 +1,5 @@
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u8)]
 pub enum FuncType {
     Sqrt,
     Log,
@@ -17,6 +18,28 @@ impl From<FuncType> for String {
     }
 }
 
+impl From<FuncType> for u8 {
+    fn from(value: FuncType) -> Self {
+        value as u8
+    }
+}
+
+#[derive(Debug)]
+pub struct InvalidFuncCode(u8);
+
+impl TryFrom<u8> for FuncType {
+    type Error = InvalidFuncCode;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            x if FuncType::Sqrt as u8 == x => Ok(FuncType::Sqrt),
+            x if FuncType::Log as u8 == x => Ok(FuncType::Log),
+            x if FuncType::Sin as u8 == x => Ok(FuncType::Sin),
+            x if FuncType::Cos as u8 == x => Ok(FuncType::Cos),
+            x => Err(InvalidFuncCode(x)),
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Token<'a> {
     Number(&'a [u8]),
@@ -27,7 +50,7 @@ pub enum Token<'a> {
     Mult,
     Div,
     Func(FuncType),
-    Comma,
+    // Comma,
 }
 
 impl<'a> From<Token<'a>> for String {
@@ -41,7 +64,7 @@ impl<'a> From<Token<'a>> for String {
             Token::LeftParen => "(".to_string(),
             Token::RightParen => ")".to_string(),
             Token::Func(f) => f.into(),
-            Token::Comma => ",".to_string(),
+            // Token::Comma => ",".to_string(),
         }
     }
 }
@@ -49,7 +72,7 @@ impl<'a> From<Token<'a>> for String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
     Null,
-    Comma,
+    // Comma,
     Number,
     Term,
     Factor,
@@ -60,8 +83,9 @@ pub enum Priority {
 impl Priority {
     pub fn next(&self) -> Self {
         match self {
-            Self::Null => Self::Comma,
-            Self::Comma => Self::Number,
+            // Self::Null => Self::Comma,
+            // Self::Comma => Self::Number,
+            Self::Null => Self::Number,
             Self::Number => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
@@ -74,7 +98,7 @@ impl Priority {
 impl<'a> Token<'a> {
     pub fn priority(&self) -> Priority {
         match self {
-            Token::Comma => Priority::Null,
+            // Token::Comma => Priority::Null,
             Token::Number(_) => Priority::Number,
             Token::Func(_) => Priority::Factor,
             Token::LeftParen => Priority::Group,
@@ -227,7 +251,7 @@ impl<'a> Scan<'a> for Lexer<'a> {
             b'-' => Ok(self.consume_token(Token::Minus, 1)),
             b'*' => Ok(self.consume_token(Token::Mult, 1)),
             b'/' => Ok(self.consume_token(Token::Div, 1)),
-            b',' => Ok(self.consume_token(Token::Comma, 1)),
+            // b',' => Ok(self.consume_token(Token::Comma, 1)),
             ch => self.parse_fn(ch),
         }
     }
@@ -388,14 +412,14 @@ mod lexer_tests {
         assert_eq!(eof.unwrap_err(), Error::Eof);
     }
 
-    #[test]
-    fn test_comma() {
-        let mut l = Lexer::new(b",".as_slice());
-        let t = l.scan();
-        assert!(t.is_ok());
-        assert_eq!(t.unwrap(), Token::Comma);
-        assert_eq!(l.scan(), Err(Error::Eof))
-    }
+    // #[test]
+    // fn test_comma() {
+    //     let mut l = Lexer::new(b",".as_slice());
+    //     let t = l.scan();
+    //     assert!(t.is_ok());
+    //     assert_eq!(t.unwrap(), Token::Comma);
+    //     assert_eq!(l.scan(), Err(Error::Eof))
+    // }
 
     #[test]
     fn test_sin() {
