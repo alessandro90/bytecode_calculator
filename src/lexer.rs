@@ -5,6 +5,16 @@ pub enum FuncType {
     Log,
     Sin,
     Cos,
+    Pow,
+}
+
+impl FuncType {
+    pub fn arity(&self) -> usize {
+        match self {
+            Self::Pow => 2,
+            Self::Sqrt | Self::Log | Self::Cos | Self::Sin => 1,
+        }
+    }
 }
 
 impl From<FuncType> for String {
@@ -14,6 +24,7 @@ impl From<FuncType> for String {
             FuncType::Sin => "sin".into(),
             FuncType::Cos => "cos".into(),
             FuncType::Sqrt => "sqrt".into(),
+            FuncType::Pow => "pow".into(),
         }
     }
 }
@@ -35,6 +46,7 @@ impl TryFrom<u8> for FuncType {
             x if FuncType::Log as u8 == x => Ok(FuncType::Log),
             x if FuncType::Sin as u8 == x => Ok(FuncType::Sin),
             x if FuncType::Cos as u8 == x => Ok(FuncType::Cos),
+            x if FuncType::Pow as u8 == x => Ok(FuncType::Pow),
             x => Err(InvalidFuncCode(x)),
         }
     }
@@ -50,7 +62,7 @@ pub enum Token<'a> {
     Mult,
     Div,
     Func(FuncType),
-    // Comma,
+    Comma,
 }
 
 impl<'a> From<Token<'a>> for String {
@@ -64,7 +76,7 @@ impl<'a> From<Token<'a>> for String {
             Token::LeftParen => "(".to_string(),
             Token::RightParen => ")".to_string(),
             Token::Func(f) => f.into(),
-            // Token::Comma => ",".to_string(),
+            Token::Comma => ",".to_string(),
         }
     }
 }
@@ -72,7 +84,7 @@ impl<'a> From<Token<'a>> for String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
     Null,
-    // Comma,
+    Comma,
     Number,
     Term,
     Factor,
@@ -83,9 +95,8 @@ pub enum Priority {
 impl Priority {
     pub fn next(&self) -> Self {
         match self {
-            // Self::Null => Self::Comma,
-            // Self::Comma => Self::Number,
-            Self::Null => Self::Number,
+            Self::Null => Self::Comma,
+            Self::Comma => Self::Number,
             Self::Number => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
@@ -107,6 +118,7 @@ impl<'a> Token<'a> {
             Token::Minus => Priority::Term,
             Token::Mult => Priority::Factor,
             Token::Div => Priority::Factor,
+            Token::Comma => Priority::Comma,
         }
     }
 }
@@ -233,6 +245,12 @@ impl<'a> Lexer<'a> {
                 }
                 err(first_ch)
             }
+            b'p' => {
+                if self.peek_word(3) == b"pow" {
+                    return Ok(self.consume_token(Token::Func(FuncType::Pow), 3));
+                }
+                err(first_ch)
+            }
             _ => err(first_ch),
         }
     }
@@ -251,7 +269,7 @@ impl<'a> Scan<'a> for Lexer<'a> {
             b'-' => Ok(self.consume_token(Token::Minus, 1)),
             b'*' => Ok(self.consume_token(Token::Mult, 1)),
             b'/' => Ok(self.consume_token(Token::Div, 1)),
-            // b',' => Ok(self.consume_token(Token::Comma, 1)),
+            b',' => Ok(self.consume_token(Token::Comma, 1)),
             ch => self.parse_fn(ch),
         }
     }
@@ -371,7 +389,6 @@ mod lexer_tests {
         assert_eq!(token.unwrap(), Token::Div);
 
         let token = l.scan();
-        println!("{:?}", token);
         assert!(token.is_ok());
         assert_eq!(token.unwrap(), Token::Number(b"3.0e-1"));
 
@@ -454,6 +471,15 @@ mod lexer_tests {
         let t = l.scan();
         assert!(t.is_ok());
         assert_eq!(t.unwrap(), Token::Func(FuncType::Sqrt));
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
+
+    #[test]
+    fn test_pow() {
+        let mut l = Lexer::new(b"pow".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Func(FuncType::Pow));
         assert_eq!(l.scan(), Err(Error::Eof))
     }
 }

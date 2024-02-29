@@ -98,6 +98,12 @@ impl VirtualMachine {
                 self.stack.push(val);
                 Ok(())
             }
+            FuncType::Pow => {
+                let exponent = self.stack_pop("Missing exponent in pow");
+                let base = self.stack_pop("Missing base in pow");
+                self.stack.push(base.powf(exponent));
+                Ok(())
+            }
         }
     }
 
@@ -357,5 +363,23 @@ mod vm_tests {
 
         let res = vm.interpret(&opcodes);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_function_pow() {
+        let mut vm = VirtualMachine::default();
+
+        let base = 2f64;
+        let exponent = 3f64;
+        let mut opcodes = vec![Op::Number.into()];
+        opcodes.append(&mut number_to_bytes(base));
+        opcodes.push(Op::Number.into());
+        opcodes.append(&mut number_to_bytes(exponent));
+        opcodes.push(Op::Func.into());
+        opcodes.push(FuncType::Pow.into());
+
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_float_eq!(res.unwrap(), base.powf(exponent));
     }
 }
