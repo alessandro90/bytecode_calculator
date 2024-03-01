@@ -46,6 +46,7 @@ pub enum Op {
     Div = 4,
     Negate = 5,
     Func = 6,
+    Ans = 7,
 }
 
 impl From<Op> for u8 {
@@ -68,6 +69,7 @@ impl TryFrom<u8> for Op {
             4 => Ok(Op::Div),
             5 => Ok(Op::Negate),
             6 => Ok(Op::Func),
+            7 => Ok(Op::Ans),
             x => Err(InvalidOpcode(x)),
         }
     }
@@ -119,6 +121,10 @@ impl<'a> Compiler<'a> {
                 Token::Number(num_str) => self.emit_number(num_str),
                 Token::LeftParen => self.parse_group(lexer),
                 Token::Func(func_type) => self.parse_fn(lexer, func_type),
+                Token::Ans => {
+                    self.chunk.push(Op::Ans.into());
+                    Ok(())
+                }
                 t => Err(Error::InvalidTokenBefore {
                     prev: t.into(),
                     current: self.current_token.map(|tok| tok.into()),

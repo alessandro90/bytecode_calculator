@@ -63,6 +63,7 @@ pub enum Token<'a> {
     Div,
     Func(FuncType),
     Comma,
+    Ans,
 }
 
 impl<'a> From<Token<'a>> for String {
@@ -77,6 +78,7 @@ impl<'a> From<Token<'a>> for String {
             Token::RightParen => ")".to_string(),
             Token::Func(f) => f.into(),
             Token::Comma => ",".to_string(),
+            Token::Ans => "ans".to_string(),
         }
     }
 }
@@ -109,7 +111,7 @@ impl Priority {
 impl<'a> Token<'a> {
     pub fn priority(&self) -> Priority {
         match self {
-            // Token::Comma => Priority::Null,
+            Token::Ans => Priority::Number,
             Token::Number(_) => Priority::Number,
             Token::Func(_) => Priority::Factor,
             Token::LeftParen => Priority::Group,
@@ -156,7 +158,7 @@ impl<'a> Lexer<'a> {
         self.src_index += 1;
     }
 
-    fn consume_token<'b>(&mut self, t: Token<'b>, bytes: usize) -> Token<'b> {
+    fn consume_token(&mut self, t: Token<'a>, bytes: usize) -> Token<'a> {
         for _ in 0..bytes {
             self.advance();
         }
@@ -270,6 +272,7 @@ impl<'a> Scan<'a> for Lexer<'a> {
             b'*' => Ok(self.consume_token(Token::Mult, 1)),
             b'/' => Ok(self.consume_token(Token::Div, 1)),
             b',' => Ok(self.consume_token(Token::Comma, 1)),
+            b'a' if self.peek_word(3) == b"ans" => Ok(self.consume_token(Token::Ans, 3)),
             ch => self.parse_fn(ch),
         }
     }

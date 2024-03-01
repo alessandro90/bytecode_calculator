@@ -18,6 +18,7 @@ pub enum Error {
         func_type: FuncType,
         func_args: FuncArgs,
     },
+    AnsNotAvailable,
 }
 
 impl Display for Error {
@@ -31,6 +32,7 @@ impl std::error::Error for Error {}
 pub struct VirtualMachine {
     instruction_pointer: usize,
     stack: Vec<f64>,
+    ans: Option<f64>,
 }
 
 impl Default for VirtualMachine {
@@ -38,11 +40,19 @@ impl Default for VirtualMachine {
         Self {
             instruction_pointer: 0,
             stack: Vec::with_capacity(STACK_INITIAL_CAPACITY),
+            ans: None,
         }
     }
 }
 
 impl VirtualMachine {
+    pub fn new(ans: Option<f64>) -> Self {
+        Self {
+            ans,
+            ..Self::default()
+        }
+    }
+
     pub fn interpret(&mut self, opcodes: &[u8]) -> Result<f64, Error> {
         while self.instruction_pointer < opcodes.len() {
             let byte = self.advance_instruction(opcodes);
@@ -53,10 +63,21 @@ impl VirtualMachine {
                 Op::Negate => self.negate(),
                 Op::Minus | Op::Plus | Op::Mult | Op::Div => self.binary(op)?,
                 Op::Func => self.function(opcodes)?,
+                Op::Ans => self.load_ans()?,
             };
         }
         // reset for further calls
         self.stack.pop().ok_or(Error::EmptyStack)
+    }
+
+    fn load_ans(&mut self) -> Result<(), Error> {
+        match self.ans {
+            Some(ans) => {
+                self.stack.push(ans);
+                Ok(())
+            }
+            None => Err(Error::AnsNotAvailable),
+        }
     }
 
     fn function(&mut self, opcodes: &[u8]) -> Result<(), Error> {
@@ -74,17 +95,14 @@ impl VirtualMachine {
                     });
                 }
                 self.stack.push(val);
-                Ok(())
             }
             FuncType::Sin => {
                 let arg = self.stack_pop("Missing function argument (Log)");
                 self.stack.push(arg.sin());
-                Ok(())
             }
             FuncType::Cos => {
                 let arg = self.stack_pop("Missing function argument (Log)");
                 self.stack.push(arg.cos());
-                Ok(())
             }
             FuncType::Sqrt => {
                 let arg = self.stack_pop("Missing function argument (Log)");
@@ -96,15 +114,14 @@ impl VirtualMachine {
                     });
                 }
                 self.stack.push(val);
-                Ok(())
             }
             FuncType::Pow => {
                 let exponent = self.stack_pop("Missing exponent in pow");
                 let base = self.stack_pop("Missing base in pow");
                 self.stack.push(base.powf(exponent));
-                Ok(())
             }
-        }
+        };
+        Ok(())
     }
 
     #[inline(always)]
