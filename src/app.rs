@@ -42,10 +42,11 @@ pub fn run(src: &[u8]) -> Result<f64, ApplicationError> {
 
 pub fn run_repl() {
     let mut ans = None;
+    let mut input = String::new();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
-        let mut input = String::new();
+        input.clear();
         if io::stdin().read_line(&mut input).is_err() {
             continue;
         }
