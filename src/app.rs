@@ -41,8 +41,9 @@ pub fn run(src: &[u8]) -> Result<f64, ApplicationError> {
 }
 
 pub fn run_repl() {
-    let mut ans = None;
     let mut input = String::new();
+    let mut compiler = Compiler::default();
+    let mut vm = VirtualMachine::default();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
@@ -55,18 +56,22 @@ pub fn run_repl() {
         }
         let bytes = input.as_bytes();
         let mut lexer = Lexer::new(bytes);
-        let mut compiler = Compiler::default();
-        let mut vm = VirtualMachine::new(ans);
         if let Err(e) = compiler.compile(&mut lexer) {
             eprintln!("Compiler error: {}", e);
+            compiler.reset();
             continue;
         }
-        match vm.interpret(compiler.opcodes()) {
+        let ans = match vm.interpret(compiler.opcodes()) {
             Ok(value) => {
-                ans = Some(value);
-                println!("$ {}", value)
+                println!("$ {}", value);
+                Some(value)
             }
-            Err(e) => eprintln!("Virtual machine error: {}", e),
+            Err(e) => {
+                eprintln!("Virtual machine error: {}", e);
+                None
+            }
         };
+        vm.reset(ans);
+        compiler.reset();
     }
 }

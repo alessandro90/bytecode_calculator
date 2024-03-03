@@ -113,7 +113,13 @@ impl Compiler {
         &self.chunk
     }
 
-    pub fn expression(&mut self, lexer: &mut impl Scan, priority: Priority) -> CompilerResult {
+    pub fn reset(&mut self) {
+        self.chunk.clear();
+        self.prev_token = None;
+        self.current_token = None;
+    }
+
+    fn expression(&mut self, lexer: &mut impl Scan, priority: Priority) -> CompilerResult {
         self.advance(lexer)?;
         if let Some(prev) = self.prev_token {
             match prev {
@@ -507,7 +513,7 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
+        assert_eq!(compiler.opcodes()[0], Op::Number.into());
         let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
         assert_eq!(float, 3.0);
 

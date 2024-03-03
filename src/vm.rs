@@ -46,6 +46,12 @@ impl Default for VirtualMachine {
 }
 
 impl VirtualMachine {
+    pub fn reset(&mut self, ans: Option<f64>) {
+        self.instruction_pointer = 0;
+        self.stack.clear();
+        self.ans = ans;
+    }
+
     pub fn new(ans: Option<f64>) -> Self {
         Self {
             ans,
