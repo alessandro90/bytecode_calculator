@@ -52,9 +52,47 @@ impl TryFrom<u8> for FuncType {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct UnsafeSlice {
+    bytes: *const u8,
+    count: usize,
+}
+
+impl PartialEq for UnsafeSlice {
+    fn eq(&self, other: &Self) -> bool {
+        let a: &[u8] = (*self).into();
+        let b: &[u8] = (*other).into();
+        a == b
+    }
+}
+
+impl Eq for UnsafeSlice {}
+
+impl std::fmt::Debug for UnsafeSlice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let slice: &[u8] = (*self).into();
+        write!(f, "{:?}", slice)
+    }
+}
+
+impl From<&[u8]> for UnsafeSlice {
+    fn from(value: &[u8]) -> Self {
+        Self {
+            bytes: value.as_ptr(),
+            count: value.len(),
+        }
+    }
+}
+
+impl From<UnsafeSlice> for &[u8] {
+    fn from(UnsafeSlice { bytes, count }: UnsafeSlice) -> Self {
+        unsafe { std::slice::from_raw_parts(bytes, count) }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Token<'a> {
-    Number(&'a [u8]),
+pub enum Token {
+    Number(UnsafeSlice),
     LeftParen,
     RightParen,
     Plus,
@@ -66,12 +104,12 @@ pub enum Token<'a> {
     Ans,
 }
 
-impl<'a> From<Token<'a>> for String {
+impl From<Token> for String {
     fn from(value: Token) -> Self {
         match value {
             Token::Div => "/".to_string(),
             Token::Mult => "*".to_string(),
-            Token::Number(digits) => String::from_utf8_lossy(digits).into_owned(),
+            Token::Number(digits) => String::from_utf8_lossy(digits.into()).into_owned(),
             Token::Plus => "+".to_string(),
             Token::Minus => "-".to_string(),
             Token::LeftParen => "(".to_string(),
@@ -108,7 +146,7 @@ impl Priority {
     }
 }
 
-impl<'a> Token<'a> {
+impl Token {
     pub fn priority(&self) -> Priority {
         match self {
             Token::Ans => Priority::Number,
@@ -140,8 +178,8 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub trait Scan<'a> {
-    fn scan(&mut self) -> Result<Token<'a>, Error>;
+pub trait Scan {
+    fn scan(&mut self) -> Result<Token, Error>;
 }
 
 pub struct Lexer<'a> {
@@ -158,7 +196,7 @@ impl<'a> Lexer<'a> {
         self.src_index += 1;
     }
 
-    fn consume_token(&mut self, t: Token<'a>, bytes: usize) -> Token<'a> {
+    fn consume_token(&mut self, t: Token, bytes: usize) -> Token {
         for _ in 0..bytes {
             self.advance();
         }
@@ -180,9 +218,9 @@ impl<'a> Lexer<'a> {
         Ok(self.src[self.src_index])
     }
 
-    fn consume_number(&mut self) -> Result<Token<'a>, Error> {
+    fn consume_number(&mut self) -> Result<Token, Error> {
         #[inline(always)]
-        fn err<'b>(c: u8) -> Result<Token<'b>, Error> {
+        fn err(c: u8) -> Result<Token, Error> {
             Err(Error::InvalidNumberFormat(c as char))
         }
 
@@ -211,17 +249,17 @@ impl<'a> Lexer<'a> {
                     return err(c);
                 }
                 // return number(self, begin);
-                return Ok(Token::Number(&self.src[begin..self.src_index]));
+                return Ok(Token::Number(self.src[begin..self.src_index].into()));
             }
             self.advance();
             prev = Some(c);
         }
-        Ok(Token::Number(&self.src[begin..self.src_index]))
+        Ok(Token::Number(self.src[begin..self.src_index].into()))
     }
 
-    fn parse_fn(&mut self, first_ch: u8) -> Result<Token<'a>, Error> {
+    fn parse_fn(&mut self, first_ch: u8) -> Result<Token, Error> {
         #[inline(always)]
-        fn err<'b>(t: u8) -> Result<Token<'b>, Error> {
+        fn err(t: u8) -> Result<Token, Error> {
             Err(Error::InvalidChar(t as char))
         }
 
@@ -258,8 +296,8 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Scan<'a> for Lexer<'a> {
-    fn scan(&mut self) -> Result<Token<'a>, Error> {
+impl<'a> Scan for Lexer<'a> {
+    fn scan(&mut self) -> Result<Token, Error> {
         let c = self.skip_whitespace()?;
         if c.is_ascii_digit() {
             return self.consume_number();
@@ -317,7 +355,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b"1".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1".as_slice()));
+        assert_eq!(token.unwrap(), Token::Number(b"1".as_slice().into()));
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
@@ -328,7 +366,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b"1234".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1234".as_slice()));
+        assert_eq!(token.unwrap(), Token::Number(b"1234".as_slice().into()));
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
@@ -339,7 +377,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b"1.25".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1.25".as_slice()));
+        assert_eq!(token.unwrap(), Token::Number(b"1.25".as_slice().into()));
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
@@ -350,7 +388,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b"1e2".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1e2".as_slice()));
+        assert_eq!(token.unwrap(), Token::Number(b"1e2".as_slice().into()));
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
@@ -361,7 +399,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b"1e-2".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1e-2".as_slice()));
+        assert_eq!(token.unwrap(), Token::Number(b"1e-2".as_slice().into()));
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
@@ -385,7 +423,7 @@ mod lexer_tests {
 
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1.2"));
+        assert_eq!(token.unwrap(), Token::Number(b"1.2".as_slice().into()));
 
         let token = l.scan();
         assert!(token.is_ok());
@@ -393,7 +431,7 @@ mod lexer_tests {
 
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"3.0e-1"));
+        assert_eq!(token.unwrap(), Token::Number(b"3.0e-1".as_slice().into()));
 
         let token = l.scan();
         assert!(token.is_ok());
@@ -409,7 +447,7 @@ mod lexer_tests {
         let mut l = Lexer::new(b" 1.2 + 10 - 2e-3  ".as_slice());
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"1.2"));
+        assert_eq!(token.unwrap(), Token::Number(b"1.2".as_slice().into()));
 
         let token = l.scan();
         assert!(token.is_ok());
@@ -417,7 +455,7 @@ mod lexer_tests {
 
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"10"));
+        assert_eq!(token.unwrap(), Token::Number(b"10".as_slice().into()));
 
         let token = l.scan();
         assert!(token.is_ok());
@@ -425,21 +463,21 @@ mod lexer_tests {
 
         let token = l.scan();
         assert!(token.is_ok());
-        assert_eq!(token.unwrap(), Token::Number(b"2e-3"));
+        assert_eq!(token.unwrap(), Token::Number(b"2e-3".as_slice().into()));
 
         let eof = l.scan();
         assert!(eof.is_err());
         assert_eq!(eof.unwrap_err(), Error::Eof);
     }
 
-    // #[test]
-    // fn test_comma() {
-    //     let mut l = Lexer::new(b",".as_slice());
-    //     let t = l.scan();
-    //     assert!(t.is_ok());
-    //     assert_eq!(t.unwrap(), Token::Comma);
-    //     assert_eq!(l.scan(), Err(Error::Eof))
-    // }
+    #[test]
+    fn test_comma() {
+        let mut l = Lexer::new(b",".as_slice());
+        let t = l.scan();
+        assert!(t.is_ok());
+        assert_eq!(t.unwrap(), Token::Comma);
+        assert_eq!(l.scan(), Err(Error::Eof))
+    }
 
     #[test]
     fn test_sin() {

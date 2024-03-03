@@ -1,7 +1,7 @@
 use crate::lexer::{Error as LexerError, FuncType, Priority, Scan, Token};
 
-pub trait Compile<'a> {
-    fn compile(&mut self, lexer: &mut impl Scan<'a>) -> Result<(), Error>;
+pub trait Compile {
+    fn compile(&mut self, lexer: &mut impl Scan) -> Result<(), Error>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,16 +75,16 @@ impl TryFrom<u8> for Op {
     }
 }
 
-pub struct Compiler<'a> {
-    prev_token: Option<Token<'a>>,
-    current_token: Option<Token<'a>>,
+pub struct Compiler {
+    prev_token: Option<Token>,
+    current_token: Option<Token>,
     chunk: Vec<u8>,
 }
 
 pub type CompilerResult = Result<(), Error>;
 
-impl<'a> Compile<'a> for Compiler<'a> {
-    fn compile(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
+impl Compile for Compiler {
+    fn compile(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.advance(lexer)?;
         self.expression(lexer, Priority::Term)?;
 
@@ -97,7 +97,7 @@ impl<'a> Compile<'a> for Compiler<'a> {
 
 const INITIAL_CHUNK_SIZE: usize = 100;
 
-impl<'a> Default for Compiler<'a> {
+impl Default for Compiler {
     fn default() -> Self {
         let chunk = Vec::with_capacity(INITIAL_CHUNK_SIZE);
         Self {
@@ -108,17 +108,17 @@ impl<'a> Default for Compiler<'a> {
     }
 }
 
-impl<'a> Compiler<'a> {
+impl Compiler {
     pub fn opcodes(&self) -> &[u8] {
         &self.chunk
     }
 
-    pub fn expression(&mut self, lexer: &mut impl Scan<'a>, priority: Priority) -> CompilerResult {
+    pub fn expression(&mut self, lexer: &mut impl Scan, priority: Priority) -> CompilerResult {
         self.advance(lexer)?;
         if let Some(prev) = self.prev_token {
             match prev {
                 Token::Minus => self.emit_unary(lexer),
-                Token::Number(num_str) => self.emit_number(num_str),
+                Token::Number(num_str) => self.emit_number(num_str.into()),
                 Token::LeftParen => self.parse_group(lexer),
                 Token::Func(func_type) => self.parse_fn(lexer, func_type),
                 Token::Ans => {
@@ -145,7 +145,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn parse_binary(&mut self, lexer: &mut impl Scan<'a>, tok: Token<'a>) -> CompilerResult {
+    fn parse_binary(&mut self, lexer: &mut impl Scan, tok: Token) -> CompilerResult {
         self.expression(lexer, tok.priority().next())?;
         match tok {
             Token::Minus => {
@@ -168,7 +168,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn advance(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
+    fn advance(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.prev_token = self.current_token;
         let tok = lexer.scan();
         self.current_token = tok.ok();
@@ -184,12 +184,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn consume(
-        &mut self,
-        lexer: &mut impl Scan<'a>,
-        target: Token<'a>,
-        err: Error,
-    ) -> CompilerResult {
+    fn consume(&mut self, lexer: &mut impl Scan, target: Token, err: Error) -> CompilerResult {
         if self.current_token.is_some_and(|tok| tok == target) {
             self.advance(lexer)
         } else {
@@ -197,13 +192,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn parse_group(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
+    fn parse_group(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.expression(lexer, Priority::Term)?;
         self.consume(lexer, Token::RightParen, Error::UnterminedGroup)?;
         Ok(())
     }
 
-    fn parse_fn(&mut self, lexer: &mut impl Scan<'a>, func_type: FuncType) -> CompilerResult {
+    fn parse_fn(&mut self, lexer: &mut impl Scan, func_type: FuncType) -> CompilerResult {
         self.consume(lexer, Token::LeftParen, Error::MissingFunctionParen)?;
         let arity = func_type.arity();
         if arity > 0 {
@@ -219,7 +214,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_unary(&mut self, lexer: &mut impl Scan<'a>) -> CompilerResult {
+    fn emit_unary(&mut self, lexer: &mut impl Scan) -> CompilerResult {
         self.expression(lexer, Priority::Unary)?;
         self.chunk.push(Op::Negate.into());
         Ok(())
@@ -248,13 +243,13 @@ impl<'a> Compiler<'a> {
 mod compiler_tests {
     use super::*;
 
-    struct MockLexer<'a> {
-        scan_results: Vec<Token<'a>>,
+    struct MockLexer {
+        scan_results: Vec<Token>,
         index: usize,
     }
 
-    impl<'a> MockLexer<'a> {
-        fn new(tokens: Vec<Token<'a>>) -> Self {
+    impl MockLexer {
+        fn new(tokens: Vec<Token>) -> Self {
             Self {
                 scan_results: tokens,
                 index: 0,
@@ -262,8 +257,8 @@ mod compiler_tests {
         }
     }
 
-    impl<'a> Scan<'a> for MockLexer<'a> {
-        fn scan(&mut self) -> Result<Token<'a>, LexerError> {
+    impl Scan for MockLexer {
+        fn scan(&mut self) -> Result<Token, LexerError> {
             if self.index < self.scan_results.len() {
                 let tok = self.scan_results[self.index];
                 self.index += 1;
@@ -292,7 +287,7 @@ mod compiler_tests {
 
     #[test]
     fn test_single_number() {
-        let mut lexer = MockLexer::new(vec![Token::Number(b"1")]);
+        let mut lexer = MockLexer::new(vec![Token::Number(b"1".as_slice().into())]);
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
@@ -304,7 +299,7 @@ mod compiler_tests {
 
     #[test]
     fn test_single_negative_number() {
-        let mut lexer = MockLexer::new(vec![Token::Minus, Token::Number(b"1")]);
+        let mut lexer = MockLexer::new(vec![Token::Minus, Token::Number(b"1".as_slice().into())]);
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
@@ -316,7 +311,11 @@ mod compiler_tests {
 
     #[test]
     fn test_sum_of_two_numbers() {
-        let mut lexer = MockLexer::new(vec![Token::Number(b"1"), Token::Plus, Token::Number(b"2")]);
+        let mut lexer = MockLexer::new(vec![
+            Token::Number(b"1".as_slice().into()),
+            Token::Plus,
+            Token::Number(b"2".as_slice().into()),
+        ]);
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
@@ -334,12 +333,12 @@ mod compiler_tests {
     #[test]
     fn test_grouping() {
         let mut lexer = MockLexer::new(vec![
-            Token::Number(b"2"),
+            Token::Number(b"2".as_slice().into()),
             Token::Mult,
             Token::LeftParen,
-            Token::Number(b"1"),
+            Token::Number(b"1".as_slice().into()),
             Token::Plus,
-            Token::Number(b"1.5"),
+            Token::Number(b"1.5".as_slice().into()),
             Token::RightParen,
         ]);
         let mut compiler = Compiler::default();
@@ -364,19 +363,19 @@ mod compiler_tests {
     fn test_long_complex_expression() {
         // 1 + (2e-3 / 4 + 2) * 2 - 1
         let mut lexer = MockLexer::new(vec![
-            Token::Number(b"1"),
+            Token::Number(b"1".as_slice().into()),
             Token::Plus,
             Token::LeftParen,
-            Token::Number(b"2e-3"),
+            Token::Number(b"2e-3".as_slice().into()),
             Token::Div,
-            Token::Number(b"4"),
+            Token::Number(b"4".as_slice().into()),
             Token::Plus,
-            Token::Number(b"2"),
+            Token::Number(b"2".as_slice().into()),
             Token::RightParen,
             Token::Mult,
-            Token::Number(b"2"),
+            Token::Number(b"2".as_slice().into()),
             Token::Minus,
-            Token::Number(b"1"),
+            Token::Number(b"1".as_slice().into()),
         ]);
 
         let mut compiler = Compiler::default();
@@ -423,7 +422,7 @@ mod compiler_tests {
         let mut lexer = MockLexer::new(vec![
             Token::Func(FuncType::Sin),
             Token::LeftParen,
-            Token::Number(b"4"),
+            Token::Number(b"4".as_slice().into()),
             Token::RightParen,
         ]);
 
@@ -442,7 +441,7 @@ mod compiler_tests {
         let mut lexer = MockLexer::new(vec![
             Token::Func(FuncType::Cos),
             Token::LeftParen,
-            Token::Number(b"4"),
+            Token::Number(b"4".as_slice().into()),
             Token::RightParen,
         ]);
 
@@ -461,7 +460,7 @@ mod compiler_tests {
         let mut lexer = MockLexer::new(vec![
             Token::Func(FuncType::Log),
             Token::LeftParen,
-            Token::Number(b"4"),
+            Token::Number(b"4".as_slice().into()),
             Token::RightParen,
         ]);
 
@@ -480,7 +479,7 @@ mod compiler_tests {
         let mut lexer = MockLexer::new(vec![
             Token::Func(FuncType::Sqrt),
             Token::LeftParen,
-            Token::Number(b"4"),
+            Token::Number(b"4".as_slice().into()),
             Token::RightParen,
         ]);
 
@@ -499,9 +498,9 @@ mod compiler_tests {
         let mut lexer = MockLexer::new(vec![
             Token::Func(FuncType::Pow),
             Token::LeftParen,
-            Token::Number(b"3"),
+            Token::Number(b"3".as_slice().into()),
             Token::Comma,
-            Token::Number(b"2"),
+            Token::Number(b"2".as_slice().into()),
             Token::RightParen,
         ]);
 
