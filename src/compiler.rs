@@ -47,6 +47,7 @@ pub enum Op {
     Negate = 5,
     Func = 6,
     Ans = 7,
+    NumberI8 = 8,
 }
 
 impl From<Op> for u8 {
@@ -70,6 +71,7 @@ impl TryFrom<u8> for Op {
             5 => Ok(Op::Negate),
             6 => Ok(Op::Func),
             7 => Ok(Op::Ans),
+            8 => Ok(Op::NumberI8),
             x => Err(InvalidOpcode(x)),
         }
     }
@@ -233,10 +235,16 @@ impl Compiler {
 
         match num {
             Some(n) => {
-                self.chunk.push(Op::Number.into());
-                let as_u64 = n.to_bits();
-                for i in 0u64..8u64 {
-                    self.chunk.push(((as_u64 >> (i * 8)) & 0xFF) as u8);
+                if (-128f64..=127f64).contains(&n) && n.fract() == 0.0 {
+                    self.chunk.push(Op::NumberI8.into());
+                    self.chunk
+                        .push(unsafe { std::mem::transmute::<i8, u8>(n as i8) });
+                } else {
+                    self.chunk.push(Op::Number.into());
+                    let as_u64 = n.to_bits();
+                    for i in 0u64..8u64 {
+                        self.chunk.push(((as_u64 >> (i * 8)) & 0xFF) as u8);
+                    }
                 }
                 Ok(())
             }
@@ -287,6 +295,11 @@ mod compiler_tests {
         (integer, float)
     }
 
+    fn parse_i8(n: u8) -> f64 {
+        let f = unsafe { std::mem::transmute::<u8, i8>(n) };
+        f as f64
+    }
+
     fn eight_bytes_num(start: usize) -> std::ops::RangeInclusive<usize> {
         start..=start + 7
     }
@@ -297,9 +310,8 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        assert!(compiler.chunk.len() >= 9);
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 1.0);
     }
 
@@ -309,10 +321,10 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 1.0);
-        assert_eq!(compiler.chunk[9], Op::Negate.into());
+        assert_eq!(compiler.chunk[2], Op::Negate.into());
     }
 
     #[test]
@@ -325,15 +337,15 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 1.0);
 
-        assert_eq!(compiler.chunk[9], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(10)]);
+        assert_eq!(compiler.chunk[2], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[3]);
         assert_eq!(float, 2.0);
 
-        assert_eq!(compiler.chunk[18], Op::Plus.into());
+        assert_eq!(compiler.chunk[4], Op::Plus.into());
     }
 
     #[test]
@@ -350,19 +362,19 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 2.0);
 
-        assert_eq!(compiler.chunk[9], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(10)]);
+        assert_eq!(compiler.chunk[2], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[3]);
         assert_eq!(float, 1.0);
 
-        assert_eq!(compiler.chunk[18], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(19)]);
+        assert_eq!(compiler.chunk[4], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(5)]);
         assert_eq!(float, 1.5);
 
-        assert_eq!(compiler.chunk[27], Op::Plus.into());
+        assert_eq!(compiler.chunk[13], Op::Plus.into());
     }
 
     #[test]
@@ -388,39 +400,39 @@ mod compiler_tests {
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
 
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 1.0);
 
-        assert_eq!(compiler.chunk[9], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(10)]);
+        assert_eq!(compiler.chunk[2], Op::Number.into());
+        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(3)]);
         assert_eq!(float, 2e-3);
 
-        assert_eq!(compiler.chunk[18], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(19)]);
+        assert_eq!(compiler.chunk[11], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[12]);
         assert_eq!(float, 4.0);
 
-        assert_eq!(compiler.chunk[27], Op::Div.into());
+        assert_eq!(compiler.chunk[13], Op::Div.into());
 
-        assert_eq!(compiler.chunk[28], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(29)]);
+        assert_eq!(compiler.chunk[14], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[15]);
         assert_eq!(float, 2.0);
 
-        assert_eq!(compiler.chunk[37], Op::Plus.into());
+        assert_eq!(compiler.chunk[16], Op::Plus.into());
 
-        assert_eq!(compiler.chunk[38], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(39)]);
+        assert_eq!(compiler.chunk[17], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[18]);
         assert_eq!(float, 2.0);
 
-        assert_eq!(compiler.chunk[47], Op::Mult.into());
+        assert_eq!(compiler.chunk[19], Op::Mult.into());
 
-        assert_eq!(compiler.chunk[48], Op::Plus.into());
+        assert_eq!(compiler.chunk[20], Op::Plus.into());
 
-        assert_eq!(compiler.chunk[49], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(50)]);
+        assert_eq!(compiler.chunk[21], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[22]);
         assert_eq!(float, 1.0);
 
-        assert_eq!(compiler.chunk[58], Op::Minus.into());
+        assert_eq!(compiler.chunk[23], Op::Minus.into());
     }
 
     #[test]
@@ -435,11 +447,11 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 4.0);
-        assert_eq!(compiler.chunk[9], Op::Func.into());
-        assert_eq!(compiler.chunk[10], FuncType::Sin.into());
+        assert_eq!(compiler.chunk[2], Op::Func.into());
+        assert_eq!(compiler.chunk[3], FuncType::Sin.into());
     }
 
     #[test]
@@ -454,11 +466,11 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 4.0);
-        assert_eq!(compiler.chunk[9], Op::Func.into());
-        assert_eq!(compiler.chunk[10], FuncType::Cos.into());
+        assert_eq!(compiler.chunk[2], Op::Func.into());
+        assert_eq!(compiler.chunk[3], FuncType::Cos.into());
     }
 
     #[test]
@@ -473,11 +485,11 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 4.0);
-        assert_eq!(compiler.chunk[9], Op::Func.into());
-        assert_eq!(compiler.chunk[10], FuncType::Log.into());
+        assert_eq!(compiler.chunk[2], Op::Func.into());
+        assert_eq!(compiler.chunk[3], FuncType::Log.into());
     }
 
     #[test]
@@ -492,11 +504,11 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.chunk[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.chunk[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 4.0);
-        assert_eq!(compiler.chunk[9], Op::Func.into());
-        assert_eq!(compiler.chunk[10], FuncType::Sqrt.into());
+        assert_eq!(compiler.chunk[2], Op::Func.into());
+        assert_eq!(compiler.chunk[3], FuncType::Sqrt.into());
     }
 
     #[test]
@@ -513,14 +525,14 @@ mod compiler_tests {
         let mut compiler = Compiler::default();
         let res = compiler.compile(&mut lexer);
         assert!(res.is_ok());
-        assert_eq!(compiler.opcodes()[0], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(1)]);
+        assert_eq!(compiler.opcodes()[0], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[1]);
         assert_eq!(float, 3.0);
 
-        assert_eq!(compiler.chunk[9], Op::Number.into());
-        let (_, float) = parse_number(&compiler.chunk[eight_bytes_num(10)]);
+        assert_eq!(compiler.chunk[2], Op::NumberI8.into());
+        let float = parse_i8(compiler.chunk[3]);
         assert_eq!(float, 2.0);
-        assert_eq!(compiler.chunk[18], Op::Func.into());
-        assert_eq!(compiler.chunk[19], FuncType::Pow.into());
+        assert_eq!(compiler.chunk[4], Op::Func.into());
+        assert_eq!(compiler.chunk[5], FuncType::Pow.into());
     }
 }

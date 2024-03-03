@@ -66,6 +66,7 @@ impl VirtualMachine {
                 .unwrap_or_else(|e| panic!("Invalid opcode {}, error: {:?}", byte, e));
             match op {
                 Op::Number => self.number(opcodes),
+                Op::NumberI8 => self.number_i8(opcodes),
                 Op::Negate => self.negate(),
                 Op::Minus | Op::Plus | Op::Mult | Op::Div => self.binary(op)?,
                 Op::Func => self.function(opcodes)?,
@@ -150,6 +151,12 @@ impl VirtualMachine {
         let bytes = self.advance_instruction_by(opcodes, 8);
         let num = parse_number(bytes);
         self.stack.push(num);
+    }
+
+    fn number_i8(&mut self, opcodes: &[u8]) {
+        let byte = self.advance_instruction(opcodes);
+        self.stack
+            .push(unsafe { std::mem::transmute::<u8, i8>(byte) } as f64);
     }
 
     fn negate(&mut self) {
@@ -404,5 +411,17 @@ mod vm_tests {
         let res = vm.interpret(&opcodes);
         assert!(res.is_ok());
         assert_float_eq!(res.unwrap(), base.powf(exponent));
+    }
+
+    #[test]
+    fn test_i8_opcode() {
+        let mut vm = VirtualMachine::default();
+
+        let mut opcodes = vec![Op::NumberI8.into()];
+        let n = -15;
+        opcodes.push(unsafe { std::mem::transmute::<i8, u8>(n) });
+        let res = vm.interpret(&opcodes);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), n as f64);
     }
 }

@@ -1,5 +1,19 @@
+# Simple bytecode calculator
+
+A simple bytecode calculator. Can be used with an input file as
+
+```shell
+cargo run --realese path/to/mathematical_expression
+```
+
+or as a repl:
+
+```shell
+cargo run --release
+
+>> 1 + cos(2.3) * sqrt(2e-1)
+```
+
 # TODOS
 
-- add hystory to terminal (ncurses?)
-- optimize number serialization in opcodes for small numbers (8 and 16 bytes integer numbers)
-- Make lexer owning the `Vec<u8>`, Tokens the a reference lifetime equal to the one of the lexer, Compiler::compile consume the lexer
+- custom opcode for 16 and 32 bit numbers

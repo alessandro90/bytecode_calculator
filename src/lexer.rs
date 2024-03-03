@@ -248,7 +248,6 @@ impl<'a> Lexer<'a> {
                 if prev.is_some_and(|p| p == b'e' || p == b'.') {
                     return err(c);
                 }
-                // return number(self, begin);
                 return Ok(Token::Number(self.src[begin..self.src_index].into()));
             }
             self.advance();
