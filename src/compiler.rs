@@ -1,4 +1,7 @@
-use crate::lexer::{Error as LexerError, FuncType, Priority, Scan, Token};
+use crate::{
+    lexer::{Error as LexerError, FuncType, Priority, Scan, Token},
+    misc::i8_as_u8,
+};
 
 pub trait Compile {
     fn compile(&mut self, lexer: &mut impl Scan) -> Result<(), Error>;
@@ -235,16 +238,17 @@ impl Compiler {
 
         match num {
             Some(n) => {
-                if (-128f64..=127f64).contains(&n) && n.fract() == 0.0 {
+                if (i8::MIN as f64..=i8::MAX as f64).contains(&n) && n.fract() == 0.0 {
                     self.chunk.push(Op::NumberI8.into());
-                    self.chunk
-                        .push(unsafe { std::mem::transmute::<i8, u8>(n as i8) });
+                    self.chunk.push(i8_as_u8(n as i8));
                 } else {
                     self.chunk.push(Op::Number.into());
-                    let as_u64 = n.to_bits();
-                    for i in 0u64..8u64 {
-                        self.chunk.push(((as_u64 >> (i * 8)) & 0xFF) as u8);
-                    }
+                    let old_len = self.chunk.len();
+                    let f64_bytes = 8;
+                    self.chunk.resize(old_len + f64_bytes, 0);
+                    let p = self.chunk[old_len..].as_mut_ptr();
+                    let pn = std::ptr::from_ref(&n) as *const u8;
+                    unsafe { pn.copy_to_nonoverlapping(p, f64_bytes) };
                 }
                 Ok(())
             }
@@ -255,6 +259,8 @@ impl Compiler {
 
 #[cfg(test)]
 mod compiler_tests {
+    use crate::misc::u8_as_i8;
+
     use super::*;
 
     struct MockLexer {
@@ -296,7 +302,7 @@ mod compiler_tests {
     }
 
     fn parse_i8(n: u8) -> f64 {
-        let f = unsafe { std::mem::transmute::<u8, i8>(n) };
+        let f = u8_as_i8(n);
         f as f64
     }
 

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{compiler::Op, lexer::FuncType};
+use crate::{compiler::Op, lexer::FuncType, misc::u8_as_i8};
 
 const STACK_INITIAL_CAPACITY: usize = 256;
 
@@ -125,6 +125,12 @@ impl VirtualMachine {
             FuncType::Pow => {
                 let exponent = self.stack_pop("Missing exponent in pow");
                 let base = self.stack_pop("Missing base in pow");
+                if base < 0.0 && exponent.fract() != 0.0 {
+                    return Err(Error::InvalidFunctionArgs {
+                        func_type,
+                        func_args: FuncArgs::Arg2(base, exponent),
+                    });
+                }
                 self.stack.push(base.powf(exponent));
             }
         };
@@ -148,15 +154,19 @@ impl VirtualMachine {
     }
 
     fn number(&mut self, opcodes: &[u8]) {
-        let bytes = self.advance_instruction_by(opcodes, 8);
-        let num = parse_number(bytes);
-        self.stack.push(num);
+        let f64_bytes = 8;
+        let bytes = self.advance_instruction_by(opcodes, f64_bytes);
+        debug_assert!(bytes.len() == f64_bytes);
+        let p = bytes.as_ptr();
+        let mut res = 0.0;
+        let pres = std::ptr::from_mut(&mut res) as *mut u8;
+        unsafe { p.copy_to_nonoverlapping(pres, f64_bytes) };
+        self.stack.push(res);
     }
 
     fn number_i8(&mut self, opcodes: &[u8]) {
         let byte = self.advance_instruction(opcodes);
-        self.stack
-            .push(unsafe { std::mem::transmute::<u8, i8>(byte) } as f64);
+        self.stack.push(u8_as_i8(byte) as f64);
     }
 
     fn negate(&mut self) {
@@ -184,20 +194,9 @@ impl VirtualMachine {
     }
 }
 
-fn parse_number(bytes: &[u8]) -> f64 {
-    let integer = {
-        let mut res = 0;
-        for (i, &b) in bytes.iter().enumerate() {
-            res |= (b as u64) << (i as u64 * 8);
-        }
-        res
-    };
-    f64::from_bits(integer)
-}
-
 #[cfg(test)]
 mod vm_tests {
-    use crate::{compiler::Op, lexer::FuncType};
+    use crate::{compiler::Op, lexer::FuncType, misc::i8_as_u8};
 
     use super::VirtualMachine;
 
@@ -419,7 +418,7 @@ mod vm_tests {
 
         let mut opcodes = vec![Op::NumberI8.into()];
         let n = -15;
-        opcodes.push(unsafe { std::mem::transmute::<i8, u8>(n) });
+        opcodes.push(i8_as_u8(n));
         let res = vm.interpret(&opcodes);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), n as f64);

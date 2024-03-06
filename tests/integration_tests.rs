@@ -74,3 +74,29 @@ fn test_empty_group() {
         }
     );
 }
+
+#[test]
+fn test_expression_multiple_functions_invalid_pow() {
+    let mut lexer =
+        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -1.5))) * 1 / sqrt(44) * 0.005e2)"); // -0.899999
+    let mut compiler = Compiler::default();
+    let compiled = compiler.compile(&mut lexer);
+    assert!(compiled.is_ok());
+    let mut vm = VirtualMachine::default();
+    let res = vm.interpret(compiler.opcodes());
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_expression_multiple_functions() {
+    let mut lexer =
+        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -2))) * 1 / sqrt(44) * 0.005e2)"); // -0.899999
+    let mut compiler = Compiler::default();
+    let compiled = compiler.compile(&mut lexer);
+    assert!(compiled.is_ok());
+    let mut vm = VirtualMachine::default();
+    let res = vm.interpret(compiler.opcodes());
+    assert!(res.is_ok());
+    println!("{}; {}", res.unwrap(), 0.00632468f64);
+    assert_float_eq!(res.unwrap(), 0.00632468f64, 1e-8);
+}
