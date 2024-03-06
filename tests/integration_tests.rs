@@ -53,7 +53,7 @@ fn test_complex_expression() {
 
 #[test]
 fn test_unterminated_group() {
-    let mut lexer = Lexer::new(b"1 + (2 + 1 * (1 - 3)"); // -0.899999
+    let mut lexer = Lexer::new(b"1 + (2 + 1 * (1 - 3)");
     let mut compiler = Compiler::default();
     let compiled = compiler.compile(&mut lexer);
     assert!(compiled.is_err());
@@ -62,7 +62,7 @@ fn test_unterminated_group() {
 
 #[test]
 fn test_empty_group() {
-    let mut lexer = Lexer::new(b"1 + ()"); // -0.899999
+    let mut lexer = Lexer::new(b"1 + ()");
     let mut compiler = Compiler::default();
     let compiled = compiler.compile(&mut lexer);
     assert!(compiled.is_err());
@@ -78,7 +78,7 @@ fn test_empty_group() {
 #[test]
 fn test_expression_multiple_functions_invalid_pow() {
     let mut lexer =
-        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -1.5))) * 1 / sqrt(44) * 0.005e2)"); // -0.899999
+        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -1.5))) * 1 / sqrt(44) * 0.005e2)");
     let mut compiler = Compiler::default();
     let compiled = compiler.compile(&mut lexer);
     assert!(compiled.is_ok());
@@ -90,7 +90,7 @@ fn test_expression_multiple_functions_invalid_pow() {
 #[test]
 fn test_expression_multiple_functions() {
     let mut lexer =
-        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -2))) * 1 / sqrt(44) * 0.005e2)"); // -0.899999
+        Lexer::new(b"-(cos(sqrt(144) * sin(1 + pow(-1, -2))) * 1 / sqrt(44) * 0.005e2)");
     let mut compiler = Compiler::default();
     let compiled = compiler.compile(&mut lexer);
     assert!(compiled.is_ok());
