@@ -3,6 +3,12 @@ name: Rust
 on:
   push:
     branches: [ "trunk" ]
+    paths-ignore:
+      - "**/*.md"
+      - "**/.gitignore"
+      - "**/.toml"
+      - "**/.lock"
+      - examples/*
   pull_request:
     branches: [ "trunk" ]
 

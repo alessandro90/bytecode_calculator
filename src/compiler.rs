@@ -39,9 +39,6 @@ impl From<LexerError> for Error {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
-    // NOTE: a number is a 64 bit float/u64. Maybe if
-    // it is an integer and for e.g. in [0, 255] could
-    // make a Op::SmallNumber that just needs an extra byte
     Number = 0,
     Plus = 1,
     Minus = 2,
@@ -302,8 +299,7 @@ mod compiler_tests {
     }
 
     fn parse_i8(n: u8) -> f64 {
-        let f = u8_as_i8(n);
-        f as f64
+        u8_as_i8(n) as f64
     }
 
     fn eight_bytes_num(start: usize) -> std::ops::RangeInclusive<usize> {
