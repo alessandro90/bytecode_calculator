@@ -237,7 +237,7 @@ impl<'a> Lexer<'a> {
                 dot = true;
             } else if c == b'-' {
                 if prev.is_some_and(|p| p != b'e') {
-                    return err(c);
+                    return Ok(Token::Number(self.src[begin..self.src_index].into()));
                 }
             } else if c == b'e' {
                 if exponent || prev.is_some_and(|p| p != b'.' && !p.is_ascii_digit()) {
@@ -410,6 +410,22 @@ mod lexer_tests {
         let token = l.scan();
         assert!(token.is_err());
         assert_eq!(token.unwrap_err(), Error::InvalidNumberFormat('.'));
+    }
+
+    #[test]
+    fn test_subtraction() {
+        let mut l = Lexer::new(b"1-3".as_slice());
+        let token = l.scan();
+        assert!(token.is_ok());
+        assert_eq!(token.unwrap(), Token::Number(b"1".as_slice().into()));
+
+        let token = l.scan();
+        assert!(token.is_ok());
+        assert_eq!(token.unwrap(), Token::Minus);
+
+        let token = l.scan();
+        assert!(token.is_ok());
+        assert_eq!(token.unwrap(), Token::Number(b"3".as_slice().into()));
     }
 
     #[test]
