@@ -104,8 +104,8 @@ pub use terminal::*;
 
 #[cfg(feature = "gui")]
 mod gui {
-
     use eframe::egui;
+    use std::collections::VecDeque;
 
     use crate::{
         compiler::{Compile, Compiler},
@@ -116,6 +116,8 @@ mod gui {
     #[derive(Default)]
     struct App {
         expression: String,
+        prev_expressions: VecDeque<String>,
+        expression_index: Option<usize>,
         result: String,
         compiler: Compiler,
         vm: VirtualMachine,
@@ -125,7 +127,10 @@ mod gui {
         fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("Calculator");
-                ui.label(&self.expression);
+                ui.label(match self.expression_index {
+                    Some(i) => &self.prev_expressions[self.prev_expressions.len() - i - 1],
+                    None => &self.expression,
+                });
                 ui.label(&self.result);
                 self.buttons(ui);
             });
@@ -139,6 +144,10 @@ mod gui {
                 Ok(_) => match self.vm.interpret(self.compiler.opcodes()) {
                     Ok(r) => {
                         self.result = r.to_string();
+                        self.prev_expressions.push_back(self.expression.clone());
+                        if self.prev_expressions.len() >= 10 {
+                            self.prev_expressions.pop_front();
+                        }
                         self.compiler.reset();
                         self.vm.reset(Some(r));
                     }
@@ -239,6 +248,24 @@ mod gui {
                     }
                     if ui.add(single_char_btn("/")).clicked() {
                         self.expression.push('/');
+                    }
+                    if ui.add(large_btn("prev")).clicked() {
+                        let idx = match self.expression_index {
+                            Some(idx) => idx + 1,
+                            None => 0,
+                        };
+                        if self.prev_expressions.len() > idx {
+                            self.expression_index = Some(idx);
+                        }
+                    }
+                    if ui.add(large_btn("next")).clicked() {
+                        if let Some(idx) = self.expression_index {
+                            if idx == 0 {
+                                self.expression_index = None;
+                            } else {
+                                self.expression_index = Some(idx - 1);
+                            };
+                        }
                     }
                 });
             });
