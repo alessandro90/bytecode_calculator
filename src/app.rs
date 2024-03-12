@@ -161,60 +161,84 @@ mod gui {
             }
         }
 
+        fn draw_function(&mut self, ui: &mut egui::Ui, fname: &str) {
+            ui.scope(|ui| {
+                ui.visuals_mut().override_text_color = Some(egui::Color32::WHITE);
+                if ui
+                    .add(large_btn(fname).fill(egui::Color32::from_rgb(51, 66, 255)))
+                    .clicked()
+                {
+                    self.expression.push_str(fname);
+                    self.expression.push('(');
+                }
+            });
+        }
+
         fn buttons(&mut self, ui: &mut egui::Ui) {
             ui.style_mut().spacing.item_spacing = egui::Vec2::new(1.0, 1.0);
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        if ui.add(single_char_btn("(")).clicked() {
-                            self.expression.push('(');
-                        }
-                        if ui.add(single_char_btn(")")).clicked() {
-                            self.expression.push(')');
-                        }
-                        if ui.add(large_btn("Del")).clicked() {
-                            self.expression.pop();
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    if ui.add(single_char_btn("(")).clicked() {
+                        self.expression.push('(');
+                    }
+                    if ui.add(single_char_btn(")")).clicked() {
+                        self.expression.push(')');
+                    }
+                    ui.scope(|ui| {
+                        ui.visuals_mut().override_text_color = Some(egui::Color32::BLACK);
+                        if ui
+                            .add(large_btn("=").fill(egui::Color32::from_rgb(255, 165, 51)))
+                            .clicked()
+                        {
+                            self.solve();
                         }
                     });
-                    egui::Grid::new("numbers_grid_id")
-                        .spacing([1.0, 1.0])
-                        .min_col_width(20.0)
-                        .show(ui, |ui| {
-                            self.draw_number_row(ui, ["1", "2", "3"]);
-                            if ui.add(single_char_btn("+")).clicked() {
-                                self.expression.push('+');
-                            }
-                            ui.end_row();
-                            self.draw_number_row(ui, ["4", "5", "6"]);
-                            if ui.add(single_char_btn("-")).clicked() {
-                                self.expression.push('-');
-                            }
-                            ui.end_row();
-                            self.draw_number_row(ui, ["7", "8", "9"]);
-                            if ui.add(single_char_btn("*")).clicked() {
-                                self.expression.push('*');
-                            }
-                            ui.end_row();
-                            if ui.add(single_char_btn("0")).clicked() {
-                                self.expression.push('0');
-                            }
-                            if ui.add(single_char_btn(".")).clicked() {
-                                self.expression.push('.');
-                            }
-                            if ui.add(single_char_btn("=")).clicked() {
-                                self.solve();
-                            }
-                            if ui.add(single_char_btn("/")).clicked() {
-                                self.expression.push('/');
-                            }
-                            ui.end_row();
-                        });
+                    self.draw_function(ui, "cos");
+                    self.draw_function(ui, "sqrt");
                 });
-                ui.vertical(|ui| {
-                    for f in ["cos", "sin", "sqrt", "log", "ans"] {
-                        if ui.add(large_btn(f)).clicked() {
-                            self.expression.push_str(f);
-                        }
+                ui.horizontal(|ui| {
+                    self.draw_number_row(ui, ["1", "2", "3"]);
+                    if ui.add(single_char_btn("+")).clicked() {
+                        self.expression.push('+');
+                    }
+                    self.draw_function(ui, "sin");
+                    self.draw_function(ui, "log");
+                });
+
+                ui.horizontal(|ui| {
+                    self.draw_number_row(ui, ["4", "5", "6"]);
+                    if ui.add(single_char_btn("-")).clicked() {
+                        self.expression.push('-');
+                    }
+                    self.draw_function(ui, "pow");
+                    if ui.add(large_btn("10^x")).clicked() {
+                        self.expression.push('e');
+                    }
+                });
+                ui.horizontal(|ui| {
+                    self.draw_number_row(ui, ["7", "8", "9"]);
+                    if ui.add(single_char_btn("*")).clicked() {
+                        self.expression.push('*');
+                    }
+                    if ui.add(large_btn("ans")).clicked() {
+                        self.expression.push_str("ans");
+                    }
+                    if ui.add(large_btn("Del")).clicked() {
+                        self.expression.pop();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui.add(single_char_btn("0")).clicked() {
+                        self.expression.push('0');
+                    }
+                    if ui.add(single_char_btn(".")).clicked() {
+                        self.expression.push('.');
+                    }
+                    if ui.add(single_char_btn(",")).clicked() {
+                        self.expression.push(',');
+                    }
+                    if ui.add(single_char_btn("/")).clicked() {
+                        self.expression.push('/');
                     }
                 });
             });
@@ -232,7 +256,7 @@ mod gui {
     const BTN_HEGHT: f32 = 20.0;
     const BTN_WIDTH: f32 = 20.0;
     const BTN_LARGE_WIDTH: f32 = 2. * BTN_WIDTH;
-    const W_WIDTH: f32 = 6. * BTN_WIDTH + 20.;
+    const W_WIDTH: f32 = 8. * BTN_WIDTH + 20.;
     const W_HEIGHT: f32 = 200.0;
 
     pub fn run() -> std::process::ExitCode {
