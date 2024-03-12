@@ -1,38 +1,41 @@
+use crate::{compiler::Error as CompilerError, vm::Error as VMError};
+
+#[derive(Debug, Clone)]
+enum ApplicationError {
+    CompileError(CompilerError),
+    VirtualmachineError(VMError),
+}
+
+impl std::fmt::Display for ApplicationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for ApplicationError {}
+
+impl From<CompilerError> for ApplicationError {
+    fn from(value: CompilerError) -> Self {
+        Self::CompileError(value)
+    }
+}
+
+impl From<VMError> for ApplicationError {
+    fn from(value: VMError) -> Self {
+        Self::VirtualmachineError(value)
+    }
+}
+
 #[cfg(not(feature = "gui"))]
 mod terminal {
+    use super::ApplicationError;
     use std::io::{self, Write};
 
     use crate::{
-        compiler::{Compile, Compiler, Error as CompilerError},
+        compiler::{Compile, Compiler},
         lexer::Lexer,
-        vm::{Error as VMError, VirtualMachine},
+        vm::VirtualMachine,
     };
-
-    #[derive(Debug, Clone)]
-    enum ApplicationError {
-        CompileError(CompilerError),
-        VirtualmachineError(VMError),
-    }
-
-    impl std::fmt::Display for ApplicationError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{:?}", self)
-        }
-    }
-
-    impl std::error::Error for ApplicationError {}
-
-    impl From<CompilerError> for ApplicationError {
-        fn from(value: CompilerError) -> Self {
-            Self::CompileError(value)
-        }
-    }
-
-    impl From<VMError> for ApplicationError {
-        fn from(value: VMError) -> Self {
-            Self::VirtualmachineError(value)
-        }
-    }
 
     fn run_file(src: &[u8]) -> Result<f64, ApplicationError> {
         let mut lexer = Lexer::new(src);
@@ -113,6 +116,8 @@ mod gui {
         vm::VirtualMachine,
     };
 
+    use super::ApplicationError;
+
     #[derive(Default)]
     struct App {
         expression: String,
@@ -140,24 +145,30 @@ mod gui {
     impl App {
         fn solve(&mut self) {
             let mut lexer = Lexer::new(self.expression.as_bytes());
-            match self.compiler.compile(&mut lexer) {
-                Ok(_) => match self.vm.interpret(self.compiler.opcodes()) {
-                    Ok(r) => {
-                        self.result = r.to_string();
-                        self.prev_expressions.push_back(self.expression.clone());
-                        if self.prev_expressions.len() >= 10 {
-                            self.prev_expressions.pop_front();
-                        }
-                        self.compiler.reset();
-                        self.vm.reset(Some(r));
+            let res = self
+                .compiler
+                .compile(&mut lexer)
+                .map_err(ApplicationError::from)
+                .and_then(|_| {
+                    self.vm
+                        .interpret(self.compiler.opcodes())
+                        .map_err(|e| e.into())
+                });
+            match res {
+                Ok(r) => {
+                    self.result = r.to_string();
+                    self.prev_expressions.push_back(self.expression.clone());
+                    if self.prev_expressions.len() >= 10 {
+                        self.prev_expressions.pop_front();
                     }
-                    Err(e) => {
-                        self.result = e.to_string();
-                        self.compiler.reset();
-                        self.vm.reset(None);
-                    }
-                },
-                Err(e) => self.result = e.to_string(),
+                    self.compiler.reset();
+                    self.vm.reset(Some(r));
+                }
+                Err(e) => {
+                    self.result = e.to_string();
+                    self.compiler.reset();
+                    self.vm.reset(None);
+                }
             };
             self.expression.clear();
         }
