@@ -42,7 +42,7 @@ mod terminal {
         vm.interpret(compiler.opcodes()).map_err(|e| e.into())
     }
 
-    fn run_repl() {
+    fn run_repl() -> ! {
         let mut input = String::new();
         let mut compiler = Compiler::default();
         let mut vm = VirtualMachine::default();
@@ -78,18 +78,24 @@ mod terminal {
         }
     }
 
-    pub fn run() {
+    pub fn run() -> std::process::ExitCode {
         match std::env::args().nth(1) {
             Some(src_path) => {
                 let src =
                     std::fs::read(src_path).unwrap_or_else(|e| panic!("Cannot read file {}", e));
                 match run_file(&src) {
-                    Ok(res) => println!("Result of computation: {}", res),
-                    Err(e) => eprintln!("{}", e),
+                    Ok(res) => {
+                        println!("Result of computation: {}", res);
+                        std::process::ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        std::process::ExitCode::FAILURE
+                    }
                 }
             }
             None => run_repl(),
-        };
+        }
     }
 }
 
@@ -229,13 +235,18 @@ mod gui {
     const W_WIDTH: f32 = 6. * BTN_WIDTH + 20.;
     const W_HEIGHT: f32 = 200.0;
 
-    pub fn run() {
+    pub fn run() -> std::process::ExitCode {
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_inner_size([W_WIDTH, W_HEIGHT]),
             ..Default::default()
         };
-        eframe::run_native("Calculator", options, Box::new(|_| Box::<App>::default()))
-            .unwrap_or_else(|e| panic!("Cannot run application: {}", e));
+        match eframe::run_native("Calculator", options, Box::new(|_| Box::<App>::default())) {
+            Ok(_) => std::process::ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("Cannot run application: {}", e);
+                std::process::ExitCode::FAILURE
+            }
+        }
     }
 }
 
