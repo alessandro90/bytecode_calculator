@@ -17,4 +17,4 @@ cargo run --release
 # TODOS
 
 - custom opcode for 16 and 32 bit numbers
-- maybe add a gui
+- Allow to modify the previous expression visible when tipying `prev`.

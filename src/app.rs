@@ -108,7 +108,7 @@ pub use terminal::*;
 #[cfg(feature = "gui")]
 mod gui {
     use eframe::egui;
-    use std::collections::VecDeque;
+    use std::{collections::VecDeque, slice::from_raw_parts, str::from_utf8_unchecked};
 
     use crate::{
         compiler::{Compile, Compiler},
@@ -132,10 +132,9 @@ mod gui {
         fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("Calculator");
-                ui.label(match self.expression_index {
-                    Some(i) => &self.prev_expressions[self.prev_expressions.len() - i - 1],
-                    None => &self.expression,
-                });
+                let (ptr, size) = self.expression_to_compute();
+                let s = unsafe { from_raw_parts(ptr, size) };
+                ui.label(unsafe { from_utf8_unchecked(s) });
                 ui.label(&self.result);
                 self.buttons(ui);
             });
@@ -143,8 +142,25 @@ mod gui {
     }
 
     impl App {
+        // work around lifetime limitations. If I return a &str here
+        // the borrow checker does not allow the code in solve (it sees
+        // a mutable and a non mutable borrow at the same time).
+        // Otherwise I should just inline the function body. The code
+        // would be allowed, but duplicated
+        fn expression_to_compute(&self) -> (*const u8, usize) {
+            match self.expression_index {
+                Some(i) => {
+                    let s = self.prev_expressions[self.prev_expressions.len() - i - 1].as_bytes();
+                    (s.as_ptr(), s.len())
+                }
+                None => (self.expression.as_ptr(), self.expression.len()),
+            }
+        }
+
         fn solve(&mut self) {
-            let mut lexer = Lexer::new(self.expression.as_bytes());
+            let (ptr, size) = self.expression_to_compute();
+            let s = unsafe { from_raw_parts(ptr, size) };
+            let mut lexer = Lexer::new(s);
             let res = self
                 .compiler
                 .compile(&mut lexer)
@@ -156,8 +172,13 @@ mod gui {
                 });
             match res {
                 Ok(r) => {
-                    self.result = r.to_string();
-                    self.prev_expressions.push_back(self.expression.clone());
+                    self.result = format!("{:+e}", r);
+                    let expr = unsafe { from_utf8_unchecked(s) };
+                    if self.expression_index.is_none()
+                        && Some(expr) != self.prev_expressions.back().map(|x| x.as_str())
+                    {
+                        self.prev_expressions.push_back(expr.to_owned());
+                    }
                     if self.prev_expressions.len() >= 10 {
                         self.prev_expressions.pop_front();
                     }
@@ -175,7 +196,7 @@ mod gui {
 
         fn draw_number_row(&mut self, ui: &mut egui::Ui, nums: [&'static str; 3]) {
             for num in nums {
-                if ui.add(single_char_btn(num)).clicked() {
+                if ui.add(single_char_btn(num)).clicked() && self.expression_index.is_none() {
                     self.expression.push_str(num);
                 }
             }
@@ -187,6 +208,7 @@ mod gui {
                 if ui
                     .add(large_btn(fname).fill(egui::Color32::from_rgb(51, 66, 255)))
                     .clicked()
+                    && self.expression_index.is_none()
                 {
                     self.expression.push_str(fname);
                     self.expression.push('(');
@@ -198,10 +220,10 @@ mod gui {
             ui.style_mut().spacing.item_spacing = egui::Vec2::new(1.0, 1.0);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("(")).clicked() {
+                    if ui.add(single_char_btn("(")).clicked() && self.expression_index.is_none() {
                         self.expression.push('(');
                     }
-                    if ui.add(single_char_btn(")")).clicked() {
+                    if ui.add(single_char_btn(")")).clicked() && self.expression_index.is_none() {
                         self.expression.push(')');
                     }
                     ui.scope(|ui| {
@@ -218,7 +240,7 @@ mod gui {
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["1", "2", "3"]);
-                    if ui.add(single_char_btn("+")).clicked() {
+                    if ui.add(single_char_btn("+")).clicked() && self.expression_index.is_none() {
                         self.expression.push('+');
                     }
                     self.draw_function(ui, "sin");
@@ -227,37 +249,37 @@ mod gui {
 
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["4", "5", "6"]);
-                    if ui.add(single_char_btn("-")).clicked() {
+                    if ui.add(single_char_btn("-")).clicked() && self.expression_index.is_none() {
                         self.expression.push('-');
                     }
                     self.draw_function(ui, "pow");
-                    if ui.add(large_btn("10^x")).clicked() {
+                    if ui.add(large_btn("10^x")).clicked() && self.expression_index.is_none() {
                         self.expression.push('e');
                     }
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["7", "8", "9"]);
-                    if ui.add(single_char_btn("*")).clicked() {
+                    if ui.add(single_char_btn("*")).clicked() && self.expression_index.is_none() {
                         self.expression.push('*');
                     }
-                    if ui.add(large_btn("ans")).clicked() {
+                    if ui.add(large_btn("ans")).clicked() && self.expression_index.is_none() {
                         self.expression.push_str("ans");
                     }
-                    if ui.add(large_btn("Del")).clicked() {
+                    if ui.add(large_btn("Del")).clicked() && self.expression_index.is_none() {
                         self.expression.pop();
                     }
                 });
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("0")).clicked() {
+                    if ui.add(single_char_btn("0")).clicked() && self.expression_index.is_none() {
                         self.expression.push('0');
                     }
-                    if ui.add(single_char_btn(".")).clicked() {
+                    if ui.add(single_char_btn(".")).clicked() && self.expression_index.is_none() {
                         self.expression.push('.');
                     }
-                    if ui.add(single_char_btn(",")).clicked() {
+                    if ui.add(single_char_btn(",")).clicked() && self.expression_index.is_none() {
                         self.expression.push(',');
                     }
-                    if ui.add(single_char_btn("/")).clicked() {
+                    if ui.add(single_char_btn("/")).clicked() && self.expression_index.is_none() {
                         self.expression.push('/');
                     }
                     if ui.add(large_btn("prev")).clicked() {
