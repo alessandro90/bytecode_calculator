@@ -108,7 +108,7 @@ pub use terminal::*;
 #[cfg(feature = "gui")]
 mod gui {
     use eframe::egui;
-    use std::{collections::VecDeque, slice::from_raw_parts, str::from_utf8_unchecked};
+    use std::collections::VecDeque;
 
     use crate::{
         compiler::{Compile, Compiler},
@@ -146,9 +146,7 @@ mod gui {
         fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("Calculator");
-                let (ptr, size) = self.expression_to_compute_as_raw_parts();
-                let s = unsafe { from_raw_parts(ptr, size) };
-                ui.label(unsafe { from_utf8_unchecked(s) });
+                ui.label(&self.expressions[self.index()]);
                 ui.label(&self.result);
                 self.buttons(ui);
             });
@@ -156,14 +154,8 @@ mod gui {
     }
 
     impl App {
-        // work around lifetime limitations. If I return a &str here
-        // the borrow checker does not allow the code in solve (it sees
-        // a mutable and a non mutable borrow at the same time).
-        // Otherwise I should just inline the function body. The code
-        // would be allowed, but duplicated
-        fn expression_to_compute_as_raw_parts(&self) -> (*const u8, usize) {
-            let s = self.expressions[self.expressions.len() - self.expression_index - 1].as_bytes();
-            (s.as_ptr(), s.len())
+        fn index(&self) -> usize {
+            self.expressions.len() - self.expression_index - 1
         }
 
         fn is_current_expression(&self) -> bool {
@@ -171,9 +163,8 @@ mod gui {
         }
 
         fn solve(&mut self) {
-            let (ptr, size) = self.expression_to_compute_as_raw_parts();
-            let s = unsafe { from_raw_parts(ptr, size) };
-            let mut lexer = Lexer::new(s);
+            let s = &self.expressions[self.index()];
+            let mut lexer = Lexer::new(s.as_bytes());
             let res = self
                 .compiler
                 .compile(&mut lexer)
@@ -197,6 +188,9 @@ mod gui {
                 }
                 Err(e) => {
                     self.result = e.to_string();
+                    if let Some(s) = self.expressions.back_mut() {
+                        s.clear();
+                    }
                     self.compiler.reset();
                     self.vm.reset(None);
                 }
