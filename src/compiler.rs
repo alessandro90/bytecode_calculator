@@ -16,7 +16,6 @@ pub enum Error {
         current: Option<String>,
     },
     UnterminedGroup,
-    MissingExpression,
     InvalidToken(String),
     MissingFunctionParen,
     MissingCommaInFunctionCall,

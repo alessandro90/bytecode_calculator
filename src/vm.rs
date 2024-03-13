@@ -52,13 +52,6 @@ impl VirtualMachine {
         self.ans = ans;
     }
 
-    pub fn new(ans: Option<f64>) -> Self {
-        Self {
-            ans,
-            ..Self::default()
-        }
-    }
-
     pub fn interpret(&mut self, opcodes: &[u8]) -> Result<f64, Error> {
         while self.instruction_pointer < opcodes.len() {
             let byte = self.advance_instruction(opcodes);
