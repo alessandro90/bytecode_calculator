@@ -118,21 +118,35 @@ mod gui {
 
     use super::ApplicationError;
 
-    #[derive(Default)]
+    const MAX_HISTORY_LEN: usize = 10;
+
     struct App {
-        expression: String,
-        prev_expressions: VecDeque<String>,
-        expression_index: Option<usize>,
+        expressions: VecDeque<String>,
+        expression_index: usize,
         result: String,
         compiler: Compiler,
         vm: VirtualMachine,
+    }
+
+    impl Default for App {
+        fn default() -> Self {
+            let mut expressions = VecDeque::new();
+            expressions.push_back("".to_owned());
+            Self {
+                expressions,
+                expression_index: 0,
+                result: "".to_owned(),
+                compiler: Compiler::default(),
+                vm: VirtualMachine::default(),
+            }
+        }
     }
 
     impl eframe::App for App {
         fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("Calculator");
-                let (ptr, size) = self.expression_to_compute();
+                let (ptr, size) = self.expression_to_compute_as_raw_parts();
                 let s = unsafe { from_raw_parts(ptr, size) };
                 ui.label(unsafe { from_utf8_unchecked(s) });
                 ui.label(&self.result);
@@ -147,18 +161,17 @@ mod gui {
         // a mutable and a non mutable borrow at the same time).
         // Otherwise I should just inline the function body. The code
         // would be allowed, but duplicated
-        fn expression_to_compute(&self) -> (*const u8, usize) {
-            match self.expression_index {
-                Some(i) => {
-                    let s = self.prev_expressions[self.prev_expressions.len() - i - 1].as_bytes();
-                    (s.as_ptr(), s.len())
-                }
-                None => (self.expression.as_ptr(), self.expression.len()),
-            }
+        fn expression_to_compute_as_raw_parts(&self) -> (*const u8, usize) {
+            let s = self.expressions[self.expressions.len() - self.expression_index - 1].as_bytes();
+            (s.as_ptr(), s.len())
+        }
+
+        fn is_current_expression(&self) -> bool {
+            self.expression_index == 0
         }
 
         fn solve(&mut self) {
-            let (ptr, size) = self.expression_to_compute();
+            let (ptr, size) = self.expression_to_compute_as_raw_parts();
             let s = unsafe { from_raw_parts(ptr, size) };
             let mut lexer = Lexer::new(s);
             let res = self
@@ -173,14 +186,11 @@ mod gui {
             match res {
                 Ok(r) => {
                     self.result = format!("{:+e}", r);
-                    let expr = unsafe { from_utf8_unchecked(s) };
-                    if self.expression_index.is_none()
-                        && Some(expr) != self.prev_expressions.back().map(|x| x.as_str())
-                    {
-                        self.prev_expressions.push_back(expr.to_owned());
+                    if self.is_current_expression() {
+                        self.expressions.push_back("".to_owned());
                     }
-                    if self.prev_expressions.len() >= 10 {
-                        self.prev_expressions.pop_front();
+                    if self.expressions.len() >= MAX_HISTORY_LEN {
+                        self.expressions.pop_front();
                     }
                     self.compiler.reset();
                     self.vm.reset(Some(r));
@@ -191,13 +201,14 @@ mod gui {
                     self.vm.reset(None);
                 }
             };
-            self.expression.clear();
         }
 
         fn draw_number_row(&mut self, ui: &mut egui::Ui, nums: [&'static str; 3]) {
             for num in nums {
-                if ui.add(single_char_btn(num)).clicked() && self.expression_index.is_none() {
-                    self.expression.push_str(num);
+                if ui.add(single_char_btn(num)).clicked() && self.is_current_expression() {
+                    if let Some(s) = self.expressions.back_mut() {
+                        s.push_str(num)
+                    }
                 }
             }
         }
@@ -208,10 +219,12 @@ mod gui {
                 if ui
                     .add(large_btn(fname).fill(egui::Color32::from_rgb(51, 66, 255)))
                     .clicked()
-                    && self.expression_index.is_none()
+                    && self.is_current_expression()
                 {
-                    self.expression.push_str(fname);
-                    self.expression.push('(');
+                    if let Some(s) = self.expressions.back_mut() {
+                        s.push_str(fname);
+                        s.push('(');
+                    }
                 }
             });
         }
@@ -220,11 +233,15 @@ mod gui {
             ui.style_mut().spacing.item_spacing = egui::Vec2::new(1.0, 1.0);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("(")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('(');
+                    if ui.add(single_char_btn("(")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('(');
+                        }
                     }
-                    if ui.add(single_char_btn(")")).clicked() && self.expression_index.is_none() {
-                        self.expression.push(')');
+                    if ui.add(single_char_btn(")")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push(')');
+                        }
                     }
                     ui.scope(|ui| {
                         ui.visuals_mut().override_text_color = Some(egui::Color32::BLACK);
@@ -240,8 +257,10 @@ mod gui {
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["1", "2", "3"]);
-                    if ui.add(single_char_btn("+")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('+');
+                    if ui.add(single_char_btn("+")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('+');
+                        }
                     }
                     self.draw_function(ui, "sin");
                     self.draw_function(ui, "log");
@@ -249,56 +268,65 @@ mod gui {
 
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["4", "5", "6"]);
-                    if ui.add(single_char_btn("-")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('-');
+                    if ui.add(single_char_btn("-")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('-');
+                        }
                     }
                     self.draw_function(ui, "pow");
-                    if ui.add(large_btn("10^x")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('e');
+                    if ui.add(large_btn("10^x")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('e');
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["7", "8", "9"]);
-                    if ui.add(single_char_btn("*")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('*');
+                    if ui.add(single_char_btn("*")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('*');
+                        }
                     }
-                    if ui.add(large_btn("ans")).clicked() && self.expression_index.is_none() {
-                        self.expression.push_str("ans");
+                    if ui.add(large_btn("ans")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push_str("ans");
+                        }
                     }
-                    if ui.add(large_btn("Del")).clicked() && self.expression_index.is_none() {
-                        self.expression.pop();
+                    if ui.add(large_btn("Del")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.pop();
+                        }
                     }
                 });
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("0")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('0');
+                    if ui.add(single_char_btn("0")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('0');
+                        }
                     }
-                    if ui.add(single_char_btn(".")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('.');
+                    if ui.add(single_char_btn(".")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('.');
+                        }
                     }
-                    if ui.add(single_char_btn(",")).clicked() && self.expression_index.is_none() {
-                        self.expression.push(',');
+                    if ui.add(single_char_btn(",")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push(',');
+                        }
                     }
-                    if ui.add(single_char_btn("/")).clicked() && self.expression_index.is_none() {
-                        self.expression.push('/');
+                    if ui.add(single_char_btn("/")).clicked() && self.is_current_expression() {
+                        if let Some(s) = self.expressions.back_mut() {
+                            s.push('/');
+                        }
                     }
                     if ui.add(large_btn("prev")).clicked() {
-                        let idx = match self.expression_index {
-                            Some(idx) => idx + 1,
-                            None => 0,
-                        };
-                        if self.prev_expressions.len() > idx {
-                            self.expression_index = Some(idx);
+                        let idx = self.expression_index + 1;
+                        if self.expressions.len() > idx {
+                            self.expression_index = idx;
                         }
                     }
-                    if ui.add(large_btn("next")).clicked() {
-                        if let Some(idx) = self.expression_index {
-                            if idx == 0 {
-                                self.expression_index = None;
-                            } else {
-                                self.expression_index = Some(idx - 1);
-                            };
-                        }
+                    if ui.add(large_btn("next")).clicked() && !self.is_current_expression() {
+                        self.expression_index -= 1;
                     }
                 });
             });
