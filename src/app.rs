@@ -198,27 +198,70 @@ mod gui {
 
         fn draw_number_row(&mut self, ui: &mut egui::Ui, nums: [&'static str; 3]) {
             for num in nums {
-                if ui.add(single_char_btn(num)).clicked() && self.is_current_expression() {
-                    if let Some((s, _)) = self.expressions.back_mut() {
-                        s.push_str(num)
-                    }
-                }
+                self.draw_small_btn(ui, num, None, |s| s.push_str(num));
             }
         }
 
         fn draw_function(&mut self, ui: &mut egui::Ui, fname: &str) {
             ui.scope(|ui| {
                 ui.visuals_mut().override_text_color = Some(egui::Color32::WHITE);
-                if ui
-                    .add(large_btn(fname).fill(egui::Color32::from_rgb(51, 66, 255)))
-                    .clicked()
-                    && self.is_current_expression()
-                {
-                    if let Some((s, _)) = self.expressions.back_mut() {
-                        s.push_str(fname);
-                        s.push('(');
-                    }
+                self.draw_big_btn(ui, fname, Some(egui::Color32::from_rgb(51, 66, 255)), |s| {
+                    s.push_str(fname);
+                    s.push('(');
+                });
+            });
+        }
+
+        fn draw_btn<F>(
+            &mut self,
+            ui: &mut egui::Ui,
+            btn_text: &str,
+            btn_factory: fn(&str) -> egui::Button,
+            color: Option<egui::Color32>,
+            btn_cb: F,
+        ) where
+            F: Fn(&mut String),
+        {
+            let btn = btn_factory(btn_text);
+            let btn = if let Some(c) = color {
+                btn.fill(c)
+            } else {
+                btn
+            };
+            if ui.add(btn).clicked() && self.is_current_expression() {
+                if let Some((s, _)) = self.expressions.back_mut() {
+                    btn_cb(s);
                 }
+            }
+        }
+
+        fn draw_big_btn<F>(
+            &mut self,
+            ui: &mut egui::Ui,
+            btn_text: &str,
+            color: Option<egui::Color32>,
+            btn_cb: F,
+        ) where
+            F: Fn(&mut String),
+        {
+            self.draw_btn(ui, btn_text, large_btn, color, btn_cb);
+        }
+
+        fn draw_small_btn<F>(
+            &mut self,
+            ui: &mut egui::Ui,
+            btn_text: &str,
+            color: Option<egui::Color32>,
+            btn_cb: F,
+        ) where
+            F: Fn(&mut String),
+        {
+            self.draw_btn(ui, btn_text, single_char_btn, color, btn_cb);
+        }
+
+        fn draw_small_single_char_btn(&mut self, ui: &mut egui::Ui, btn_text: &str) {
+            self.draw_small_btn(ui, btn_text, None, |s| {
+                s.push_str(btn_text);
             });
         }
 
@@ -226,16 +269,8 @@ mod gui {
             ui.style_mut().spacing.item_spacing = egui::Vec2::new(1.0, 1.0);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("(")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('(');
-                        }
-                    }
-                    if ui.add(single_char_btn(")")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push(')');
-                        }
-                    }
+                    self.draw_small_single_char_btn(ui, "(");
+                    self.draw_small_single_char_btn(ui, ")");
                     ui.scope(|ui| {
                         ui.visuals_mut().override_text_color = Some(egui::Color32::BLACK);
                         if ui
@@ -250,68 +285,34 @@ mod gui {
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["1", "2", "3"]);
-                    if ui.add(single_char_btn("+")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('+');
-                        }
-                    }
+                    self.draw_small_single_char_btn(ui, "+");
                     self.draw_function(ui, "sin");
                     self.draw_function(ui, "log");
                 });
 
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["4", "5", "6"]);
-                    if ui.add(single_char_btn("-")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('-');
-                        }
-                    }
+                    self.draw_small_single_char_btn(ui, "-");
                     self.draw_function(ui, "pow");
-                    if ui.add(large_btn("10^x")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('e');
-                        }
-                    }
+                    self.draw_big_btn(ui, "10^x", None, |s| {
+                        s.push('e');
+                    });
                 });
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["7", "8", "9"]);
-                    if ui.add(single_char_btn("*")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('*');
-                        }
-                    }
-                    if ui.add(large_btn("ans")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push_str("ans");
-                        }
-                    }
-                    if ui.add(large_btn("Del")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.pop();
-                        }
-                    }
+                    self.draw_small_single_char_btn(ui, "*");
+                    self.draw_big_btn(ui, "ans", None, |s| {
+                        s.push_str("ans");
+                    });
+                    self.draw_big_btn(ui, "Del", None, |s| {
+                        s.pop();
+                    });
                 });
                 ui.horizontal(|ui| {
-                    if ui.add(single_char_btn("0")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('0');
-                        }
-                    }
-                    if ui.add(single_char_btn(".")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('.');
-                        }
-                    }
-                    if ui.add(single_char_btn(",")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push(',');
-                        }
-                    }
-                    if ui.add(single_char_btn("/")).clicked() && self.is_current_expression() {
-                        if let Some((s, _)) = self.expressions.back_mut() {
-                            s.push('/');
-                        }
-                    }
+                    self.draw_small_single_char_btn(ui, "0");
+                    self.draw_small_single_char_btn(ui, ".");
+                    self.draw_small_single_char_btn(ui, ",");
+                    self.draw_small_single_char_btn(ui, "/");
                     if ui.add(large_btn("prev")).clicked() {
                         let idx = self.expression_index + 1;
                         if self.expressions.len() > idx {
