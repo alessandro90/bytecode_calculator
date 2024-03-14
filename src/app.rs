@@ -121,7 +121,7 @@ mod gui {
     const MAX_HISTORY_LEN: usize = 10;
 
     struct App {
-        expressions: VecDeque<String>,
+        expressions: VecDeque<(String, Option<f64>)>,
         expression_index: usize,
         result: String,
         compiler: Compiler,
@@ -131,7 +131,7 @@ mod gui {
     impl Default for App {
         fn default() -> Self {
             let mut expressions = VecDeque::new();
-            expressions.push_back("".to_owned());
+            expressions.push_back(("".to_owned(), None));
             Self {
                 expressions,
                 expression_index: 0,
@@ -146,7 +146,7 @@ mod gui {
         fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("Calculator");
-                ui.label(&self.expressions[self.index()]);
+                ui.label(&self.expressions[self.index()].0);
                 ui.label(&self.result);
                 self.buttons(ui);
             });
@@ -163,8 +163,9 @@ mod gui {
         }
 
         fn solve(&mut self) {
-            let s = &self.expressions[self.index()];
+            let (s, ans) = &self.expressions[self.index()];
             let mut lexer = Lexer::new(s.as_bytes());
+            self.vm.reset(*ans);
             let res = self
                 .compiler
                 .compile(&mut lexer)
@@ -178,21 +179,19 @@ mod gui {
                 Ok(r) => {
                     self.result = format!("{:+e}", r);
                     if self.is_current_expression() {
-                        self.expressions.push_back("".to_owned());
+                        self.expressions.push_back(("".to_owned(), Some(r)));
                     }
                     if self.expressions.len() >= MAX_HISTORY_LEN {
                         self.expressions.pop_front();
                     }
                     self.compiler.reset();
-                    self.vm.reset(Some(r));
                 }
                 Err(e) => {
                     self.result = e.to_string();
-                    if let Some(s) = self.expressions.back_mut() {
+                    if let Some((s, _)) = self.expressions.back_mut() {
                         s.clear();
                     }
                     self.compiler.reset();
-                    self.vm.reset(None);
                 }
             };
         }
@@ -200,7 +199,7 @@ mod gui {
         fn draw_number_row(&mut self, ui: &mut egui::Ui, nums: [&'static str; 3]) {
             for num in nums {
                 if ui.add(single_char_btn(num)).clicked() && self.is_current_expression() {
-                    if let Some(s) = self.expressions.back_mut() {
+                    if let Some((s, _)) = self.expressions.back_mut() {
                         s.push_str(num)
                     }
                 }
@@ -215,7 +214,7 @@ mod gui {
                     .clicked()
                     && self.is_current_expression()
                 {
-                    if let Some(s) = self.expressions.back_mut() {
+                    if let Some((s, _)) = self.expressions.back_mut() {
                         s.push_str(fname);
                         s.push('(');
                     }
@@ -228,12 +227,12 @@ mod gui {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     if ui.add(single_char_btn("(")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('(');
                         }
                     }
                     if ui.add(single_char_btn(")")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push(')');
                         }
                     }
@@ -252,7 +251,7 @@ mod gui {
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["1", "2", "3"]);
                     if ui.add(single_char_btn("+")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('+');
                         }
                     }
@@ -263,13 +262,13 @@ mod gui {
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["4", "5", "6"]);
                     if ui.add(single_char_btn("-")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('-');
                         }
                     }
                     self.draw_function(ui, "pow");
                     if ui.add(large_btn("10^x")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('e');
                         }
                     }
@@ -277,39 +276,39 @@ mod gui {
                 ui.horizontal(|ui| {
                     self.draw_number_row(ui, ["7", "8", "9"]);
                     if ui.add(single_char_btn("*")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('*');
                         }
                     }
                     if ui.add(large_btn("ans")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push_str("ans");
                         }
                     }
                     if ui.add(large_btn("Del")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.pop();
                         }
                     }
                 });
                 ui.horizontal(|ui| {
                     if ui.add(single_char_btn("0")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('0');
                         }
                     }
                     if ui.add(single_char_btn(".")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('.');
                         }
                     }
                     if ui.add(single_char_btn(",")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push(',');
                         }
                     }
                     if ui.add(single_char_btn("/")).clicked() && self.is_current_expression() {
-                        if let Some(s) = self.expressions.back_mut() {
+                        if let Some((s, _)) = self.expressions.back_mut() {
                             s.push('/');
                         }
                     }
