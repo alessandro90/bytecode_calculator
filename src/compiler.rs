@@ -179,16 +179,16 @@ impl Compiler {
         self.prev_token = self.current_token;
         let tok = lexer.scan();
         self.current_token = tok.ok();
-        match tok {
-            Ok(_) => Ok(()),
-            Err(e) => {
+        tok.map_or_else(
+            |e| {
                 if e != LexerError::Eof {
                     Err(e.into())
                 } else {
                     Ok(())
                 }
-            }
-        }
+            },
+            |_| Ok(()),
+        )
     }
 
     fn consume(&mut self, lexer: &mut impl Scan, target: Token, err: Error) -> CompilerResult {
