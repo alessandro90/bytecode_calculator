@@ -1,19 +1,11 @@
 extern crate vm_calculator;
 
 use vm_calculator::{
+    assert_float_eq,
     compiler::{self, Compile, Compiler},
     lexer::Lexer,
     vm::{self, VirtualMachine},
 };
-
-macro_rules! assert_float_eq {
-    ($a:expr, $b:expr) => {
-        assert!($a.abs() >= $b.abs() - 1e-6 && $a.abs() <= $b.abs() + 1e-6)
-    };
-    ($a:expr, $b:expr, $delta:expr) => {
-        assert!($a.abs() >= $b.abs() - $delta && $a.abs() <= $b.abs() + $delta)
-    };
-}
 
 #[test]
 fn test_addition() {

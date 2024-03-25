@@ -189,18 +189,9 @@ impl VirtualMachine {
 
 #[cfg(test)]
 mod vm_tests {
-    use crate::{compiler::Op, lexer::FuncType, misc::i8_as_u8};
+    use crate::{assert_float_eq, compiler::Op, lexer::FuncType, misc::i8_as_u8};
 
     use super::VirtualMachine;
-
-    macro_rules! assert_float_eq {
-        ($a:expr, $b:expr) => {
-            assert!($a.abs() >= $b.abs() - 1e-6 && $a.abs() <= $b.abs() + 1e-6)
-        };
-        ($a:expr, $b:expr, $delta:expr) => {
-            assert!($a.abs() >= $b.abs() - $delta && $a.abs() <= $b.abs() + $delta)
-        };
-    }
 
     fn number_to_bytes(n: f64) -> Vec<u8> {
         let as_u64 = n.to_bits();
