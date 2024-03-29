@@ -36,6 +36,7 @@ impl From<FuncType> for u8 {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct InvalidFuncCode(u8);
 
 impl TryFrom<u8> for FuncType {

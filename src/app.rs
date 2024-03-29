@@ -2,7 +2,9 @@ use crate::{compiler::Error as CompilerError, vm::Error as VMError};
 
 #[derive(Debug, Clone)]
 enum ApplicationError {
+    #[allow(dead_code)]
     CompileError(CompilerError),
+    #[allow(dead_code)]
     VirtualmachineError(VMError),
 }
 
