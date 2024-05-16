@@ -219,6 +219,14 @@ impl<'a> Lexer<'a> {
         Ok(self.src[self.src_index])
     }
 
+    // TODO: Change function implementation and use state pattern with an enum
+    // Something like this
+    // enum State {
+    //     ParseFirst,
+    //     ParseIntegral,
+    //     ParseFractional,
+    //     ParseExponent,
+    // }
     fn consume_number(&mut self) -> Result<Token, Error> {
         #[inline(always)]
         fn err(c: u8) -> Result<Token, Error> {
