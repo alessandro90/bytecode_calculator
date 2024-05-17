@@ -219,50 +219,82 @@ impl<'a> Lexer<'a> {
         Ok(self.src[self.src_index])
     }
 
-    // TODO: Change function implementation and use state pattern with an enum
-    // Something like this
-    // enum State {
-    //     ParseFirst,
-    //     ParseIntegral,
-    //     ParseFractional,
-    //     ParseExponent,
-    // }
     fn consume_number(&mut self) -> Result<Token, Error> {
         #[inline(always)]
         fn err(c: u8) -> Result<Token, Error> {
             Err(Error::InvalidNumberFormat(c as char))
         }
 
-        let begin = self.src_index;
-        let mut dot = false;
-        let mut exponent = false;
-        let mut prev: Option<u8> = None;
+        enum State {
+            CheckMinus,
+            Integral,
+            Fractional,
+            CheckNegativeExponent,
+            Exponent,
+        }
+        let mut state = State::CheckMinus;
 
+        let begin = self.src_index;
         while let Some(c) = self.peek() {
-            if c == b'.' {
-                if dot || exponent {
+            match state {
+                State::CheckMinus => {
+                    if c == b'-' {
+                        self.advance();
+                    }
+                    if self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+                        state = State::Integral;
+                        continue;
+                    }
                     return err(c);
                 }
-                dot = true;
-            } else if c == b'-' {
-                if prev.is_some_and(|p| p != b'e') {
+                State::Integral => {
+                    if c.is_ascii_digit() {
+                        self.advance();
+                        continue;
+                    }
+                    if c == b'.' {
+                        self.advance();
+                        state = State::Fractional;
+                        continue;
+                    }
+                    if c == b'e' {
+                        self.advance();
+                        state = State::CheckNegativeExponent;
+                        continue;
+                    }
                     return Ok(Token::Number(self.src[begin..self.src_index].into()));
                 }
-            } else if c == b'e' {
-                if exponent || prev.is_some_and(|p| p != b'.' && !p.is_ascii_digit()) {
-                    return err(c);
+                State::Fractional => {
+                    if c.is_ascii_digit() {
+                        self.advance();
+                        continue;
+                    }
+                    if c == b'e' {
+                        self.advance();
+                        state = State::CheckNegativeExponent;
+                        continue;
+                    }
+                    if c == b'.' {
+                        return err(c);
+                    }
+                    return Ok(Token::Number(self.src[begin..self.src_index].into()));
                 }
-                exponent = true;
-            } else if !c.is_ascii_digit() {
-                if prev.is_some_and(|p| p == b'e' || p == b'.') {
-                    return err(c);
+                State::CheckNegativeExponent => {
+                    if c == b'-' {
+                        self.advance();
+                    }
+                    state = State::Exponent;
                 }
-                return Ok(Token::Number(self.src[begin..self.src_index].into()));
+                State::Exponent => {
+                    if c.is_ascii_digit() {
+                        self.advance();
+                        continue;
+                    }
+                    break;
+                }
             }
-            self.advance();
-            prev = Some(c);
         }
-        Ok(Token::Number(self.src[begin..self.src_index].into()))
+        return Ok(Token::Number(self.src[begin..self.src_index].into()));
     }
 
     fn parse_fn(&mut self, first_ch: u8) -> Result<Token, Error> {
