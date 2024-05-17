@@ -311,28 +311,25 @@ impl<'a> Lexer<'a> {
                 if self.peek_word(4) == b"sqrt" {
                     return Ok(self.consume_token(Token::Func(FuncType::Sqrt), 4));
                 }
-                err(first_ch)
             }
             b'c' => {
                 if self.peek_word(3) == b"cos" {
                     return Ok(self.consume_token(Token::Func(FuncType::Cos), 3));
                 }
-                err(first_ch)
             }
             b'l' => {
                 if self.peek_word(3) == b"log" {
                     return Ok(self.consume_token(Token::Func(FuncType::Log), 3));
                 }
-                err(first_ch)
             }
             b'p' => {
                 if self.peek_word(3) == b"pow" {
                     return Ok(self.consume_token(Token::Func(FuncType::Pow), 3));
                 }
-                err(first_ch)
             }
-            _ => err(first_ch),
+            _ => {}
         }
+        err(first_ch)
     }
 }
 
