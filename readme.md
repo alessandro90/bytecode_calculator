@@ -3,7 +3,7 @@
 A simple bytecode calculator. Can be used with an input file as
 
 ```shell
-cargo run --realese path/to/mathematical_expression
+cargo run --release path/to/mathematical_expression
 ```
 
 or as a repl:
